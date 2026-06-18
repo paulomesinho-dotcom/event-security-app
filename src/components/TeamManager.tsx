@@ -55,7 +55,7 @@ export default function TeamManager() {
       snap.forEach(d => {
         const u = { id: d.id, ...d.data() } as User;
         todosVigias.push(u);
-        if (!u.workplaceId && !u.teamId) livres.push(u);
+        if (!u.workplaceId) livres.push(u);
         if (u.workplaceId === activeWorkplace.id) meus.push(u);
       });
       setVigiasLivre(livres);
