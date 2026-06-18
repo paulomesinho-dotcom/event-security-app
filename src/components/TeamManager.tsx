@@ -55,9 +55,8 @@ export default function TeamManager() {
       snap.forEach(d => {
         const u = { id: d.id, ...d.data() } as User;
         todosVigias.push(u);
-        // We consider a vigia free if they have neither teamId nor workplaceId, or just no workplaceId.
         if (!u.workplaceId && !u.teamId) livres.push(u);
-        if (u.workplaceId === activeWorkplace.id || (u.teamId === user.uid && !u.workplaceId)) meus.push(u); // fallback for backwards compatibility
+        if (u.workplaceId === activeWorkplace.id || (u.teamId === activeWorkplace.captainId && !u.workplaceId)) meus.push(u); // fallback for legacy data
       });
       setVigiasLivre(livres);
       setMinhaEquipa(meus);

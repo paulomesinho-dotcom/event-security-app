@@ -32,8 +32,10 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
 
   // Drag and Pan state
   const isDragging = useRef(false);
+  const initialPos = useRef({ x: 0, y: 0 }); // To track total drag distance
   const lastPos = useRef({ x: 0, y: 0 });
   const [dragMoved, setDragMoved] = useState(false);
+  const [isPanning, setIsPanning] = useState(false);
   
   // Pin Dragging state
   const [draggingLocator, setDraggingLocator] = useState<{ id: string, x: number, y: number } | null>(null);
@@ -57,10 +59,12 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
   const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
     if ('touches' in e && e.touches.length > 1) return;
     isDragging.current = true;
+    setIsPanning(true);
     setDragMoved(false);
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
     lastPos.current = { x: clientX, y: clientY };
+    initialPos.current = { x: clientX, y: clientY };
   };
 
   const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
@@ -73,7 +77,10 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
     const dx = clientX - lastPos.current.x;
     const dy = clientY - lastPos.current.y;
     
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+    const totalDx = clientX - initialPos.current.x;
+    const totalDy = clientY - initialPos.current.y;
+    
+    if (Math.abs(totalDx) > 5 || Math.abs(totalDy) > 5) {
       setDragMoved(true);
     }
     
@@ -97,6 +104,7 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
   const handleMouseUp = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
     if (!isDragging.current) return;
     isDragging.current = false;
+    setIsPanning(false);
 
     if (draggingLocator) {
       if (dragMoved && onLocatorDragEnd) {
@@ -119,6 +127,7 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
 
   const handleMouseLeave = () => {
     isDragging.current = false;
+    setIsPanning(false);
     if (draggingLocator && dragMoved && onLocatorDragEnd) {
       onLocatorDragEnd(draggingLocator.id, draggingLocator.x, draggingLocator.y);
       setDraggingLocator(null);
@@ -223,7 +232,7 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
            maxHeight: "70vh", 
            width: "100%", 
            background: "#e5e7eb",
-           cursor: isAddPinMode ? "crosshair" : isDragging.current ? "grabbing" : "grab",
+           cursor: isAddPinMode ? "crosshair" : isPanning ? "grabbing" : "grab",
            touchAction: "none" // Prevents browser panning
          }}
       >

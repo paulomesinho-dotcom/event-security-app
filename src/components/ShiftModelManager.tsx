@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWorkplace } from "@/contexts/WorkplaceContext";
 import { Clock, Plus, Trash2 } from "lucide-react";
 
 export interface ShiftModel {
@@ -20,6 +21,7 @@ export interface ShiftModel {
 
 export default function ShiftModelManager() {
   const { user } = useAuth();
+  const { activeWorkplaceId, activeWorkplace } = useWorkplace();
   const [models, setModels] = useState<ShiftModel[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -33,19 +35,30 @@ export default function ShiftModelManager() {
   const [afternoonEnd, setAfternoonEnd] = useState("");
 
   useEffect(() => {
-    if (!user) return;
-    const q = query(collection(db, "shift_models"), where("captainId", "==", user.uid));
+    if (!user || !activeWorkplaceId) {
+      setModels([]);
+      setLoading(false);
+      return;
+    }
+    
+    // We query by captainId to get all legacy models, but filter by workplaceId in memory if available
+    const q = query(collection(db, "shift_models"), where("captainId", "==", activeWorkplace?.captainId || user.uid));
     const unsub = onSnapshot(q, (snap) => {
-      setModels(snap.docs.map(d => ({ id: d.id, ...d.data() } as ShiftModel)));
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      // Show models that belong to this workplace OR legacy models that have no workplaceId
+      const filtered = data.filter(m => m.workplaceId === activeWorkplaceId || !m.workplaceId);
+      setModels(filtered);
       setLoading(false);
     });
     return () => unsub();
-  }, [user]);
+  }, [user, activeWorkplaceId, activeWorkplace]);
 
   const handleCreate = async () => {
-    if (!name || dates.length === 0 || (!morningStart && !afternoonStart)) return;
+    if (!name || dates.length === 0 || (!morningStart && !afternoonStart) || !activeWorkplaceId) return;
     await addDoc(collection(db, "shift_models"), {
-      name, dates, morningStart, morningEnd, afternoonStart, afternoonEnd, captainId: user?.uid
+      name, dates, morningStart, morningEnd, afternoonStart, afternoonEnd, 
+      captainId: activeWorkplace?.captainId || user?.uid,
+      workplaceId: activeWorkplaceId
     });
     setName(""); setDates([]); setCurrentDate(""); setMorningStart(""); setMorningEnd(""); setAfternoonStart(""); setAfternoonEnd("");
     setShowForm(false);

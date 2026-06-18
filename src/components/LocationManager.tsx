@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWorkplace } from "@/contexts/WorkplaceContext";
 import { Map, Plus, Trash2 } from "lucide-react";
 import { ShiftModel } from "./ShiftModelManager";
 
@@ -18,6 +19,7 @@ export interface AbstractLocation {
 
 export default function LocationManager() {
   const { user } = useAuth();
+  const { activeWorkplaceId, activeWorkplace } = useWorkplace();
   const [locations, setLocations] = useState<AbstractLocation[]>([]);
   const [models, setModels] = useState<ShiftModel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,28 +31,39 @@ export default function LocationManager() {
   const [shiftModelId, setShiftModelId] = useState("");
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !activeWorkplaceId) {
+      setLocations([]);
+      setModels([]);
+      setLoading(false);
+      return;
+    }
     
-    // Fetch Locations
-    const qLoc = query(collection(db, "abstract_locations"), where("captainId", "==", user.uid));
+    const captainId = activeWorkplace?.captainId || user.uid;
+
+    // Fetch Locations (legacy + current workplace)
+    const qLoc = query(collection(db, "abstract_locations"), where("captainId", "==", captainId));
     const unsubLoc = onSnapshot(qLoc, (snap) => {
-      setLocations(snap.docs.map(d => ({ id: d.id, ...d.data() } as AbstractLocation)));
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      setLocations(data.filter(l => l.workplaceId === activeWorkplaceId || !l.workplaceId));
     });
 
-    // Fetch Shift Models
-    const qMod = query(collection(db, "shift_models"), where("captainId", "==", user.uid));
+    // Fetch Shift Models (legacy + current workplace)
+    const qMod = query(collection(db, "shift_models"), where("captainId", "==", captainId));
     const unsubMod = onSnapshot(qMod, (snap) => {
-      setModels(snap.docs.map(d => ({ id: d.id, ...d.data() } as ShiftModel)));
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      setModels(data.filter(m => m.workplaceId === activeWorkplaceId || !m.workplaceId));
       setLoading(false);
     });
 
     return () => { unsubLoc(); unsubMod(); };
-  }, [user]);
+  }, [user, activeWorkplaceId, activeWorkplace]);
 
   const handleCreate = async () => {
-    if (!local || !shiftModelId) return;
+    if (!local || !shiftModelId || !activeWorkplaceId) return;
     await addDoc(collection(db, "abstract_locations"), {
-      local, sublocal, subsublocal, shiftModelId, captainId: user?.uid
+      local, sublocal, subsublocal, shiftModelId, 
+      captainId: activeWorkplace?.captainId || user?.uid,
+      workplaceId: activeWorkplaceId
     });
     setLocal(""); setSublocal(""); setSubsublocal(""); setShiftModelId("");
     setShowForm(false);
