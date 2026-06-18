@@ -4,13 +4,15 @@ import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWorkplace } from "@/contexts/WorkplaceContext";
 import { UserPlus, Users, ArrowRightLeft } from "lucide-react";
 
 interface User {
   id: string;
   name: string;
   role: string;
-  teamId?: string;
+  teamId?: string; // legacy
+  workplaceId?: string;
   congregation?: string;
 }
 
@@ -24,6 +26,7 @@ interface Loan {
 
 export default function TeamManager() {
   const { user } = useAuth();
+  const { activeWorkplace } = useWorkplace();
   const [vigiasLivre, setVigiasLivre] = useState<User[]>([]);
   const [minhaEquipa, setMinhaEquipa] = useState<User[]>([]);
   const [vigiasCedidos, setVigiasCedidos] = useState<{loan: Loan, vigia: User}[]>([]);
@@ -36,7 +39,12 @@ export default function TeamManager() {
   const [loanToCaptainId, setLoanToCaptainId] = useState("");
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !activeWorkplace) {
+      setVigiasLivre([]);
+      setMinhaEquipa([]);
+      setLoading(false);
+      return;
+    }
 
     // Fetch all vigias
     const unsubUsers = onSnapshot(query(collection(db, "users"), where("role", "==", "vigia")), (snap) => {
@@ -47,8 +55,9 @@ export default function TeamManager() {
       snap.forEach(d => {
         const u = { id: d.id, ...d.data() } as User;
         todosVigias.push(u);
-        if (!u.teamId) livres.push(u);
-        if (u.teamId === user.uid) meus.push(u);
+        // We consider a vigia free if they have neither teamId nor workplaceId, or just no workplaceId.
+        if (!u.workplaceId && !u.teamId) livres.push(u);
+        if (u.workplaceId === activeWorkplace.id || (u.teamId === user.uid && !u.workplaceId)) meus.push(u); // fallback for backwards compatibility
       });
       setVigiasLivre(livres);
       setMinhaEquipa(meus);
@@ -83,15 +92,16 @@ export default function TeamManager() {
       unsubUsers();
       unsubCaps();
     };
-  }, [user]);
+  }, [user, activeWorkplace]);
 
   const addToTeam = async (vigiaId: string) => {
-    await updateDoc(doc(db, "users", vigiaId), { teamId: user?.uid });
+    if (!activeWorkplace) return;
+    await updateDoc(doc(db, "users", vigiaId), { teamId: user?.uid, workplaceId: activeWorkplace.id });
   };
 
   const removeFromTeam = async (vigiaId: string) => {
     if (confirm("Remover da sua equipa?")) {
-       await updateDoc(doc(db, "users", vigiaId), { teamId: null });
+       await updateDoc(doc(db, "users", vigiaId), { teamId: null, workplaceId: null });
     }
   };
 

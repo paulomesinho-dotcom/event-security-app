@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { LogOut, LayoutDashboard, Users, Map, Settings, Clock, MapPin, Building, Plus, Search, HelpCircle, Menu } from "lucide-react";
+import { LogOut, LayoutDashboard, Users, Map, Settings, Clock, MapPin, Building, Plus, Search, HelpCircle, Menu, ChevronDown, AlertTriangle } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { updatePassword } from "firebase/auth";
 
@@ -17,6 +17,72 @@ import TeamManager from "@/components/TeamManager";
 import VigiaDashboard from "@/components/VigiaDashboard";
 import ShiftModelManager from "@/components/ShiftModelManager";
 import LocationManager from "@/components/LocationManager";
+import SettingsModal from "@/components/SettingsModal";
+import EmergencyBanner from "@/components/EmergencyBanner";
+import EmergencyControl from "@/components/EmergencyControl";
+import { useWorkplace } from "@/contexts/WorkplaceContext";
+
+function WorkplaceSwitcher() {
+  const { workplaces, activeWorkplaceId, setActiveWorkplaceId, loadingWorkplaces } = useWorkplace();
+  const [isOpen, setIsOpen] = useState(false);
+  
+  if (loadingWorkplaces) return <div style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>A carregar...</div>;
+  if (workplaces.length === 0) return <div style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>Nenhum Workplace</div>;
+  
+  const activeName = workplaces.find(w => w.id === activeWorkplaceId)?.name || "Selecione...";
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        style={{ 
+          display: "flex", alignItems: "center", gap: "0.5rem",
+          padding: "0.5rem 1rem", fontSize: "0.875rem", 
+          background: "var(--color-surface)", color: "var(--color-text-primary)",
+          border: "1px solid var(--color-border)", borderRadius: "var(--radius-full)",
+          cursor: "pointer", transition: "all 0.2s ease"
+        }}
+        onMouseEnter={(e) => e.currentTarget.style.background = "var(--color-bg)"}
+        onMouseLeave={(e) => e.currentTarget.style.background = "var(--color-surface)"}
+      >
+        <Building size={16} color="var(--color-primary)" />
+        <span style={{ fontWeight: 600 }}>{activeName}</span>
+        <ChevronDown size={14} style={{ marginLeft: "0.25rem", opacity: 0.7, transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+      </button>
+
+      {isOpen && (
+        <>
+          <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 90 }} onClick={() => setIsOpen(false)} />
+          <div style={{ 
+            position: "absolute", top: "calc(100% + 0.5rem)", right: 0,
+            background: "var(--color-surface)", border: "1px solid var(--color-border)",
+            borderRadius: "var(--radius-md)", padding: "0.5rem",
+            minWidth: "200px", boxShadow: "var(--shadow-lg)", zIndex: 100,
+            display: "flex", flexDirection: "column", gap: "0.25rem"
+          }}>
+            {workplaces.map(w => (
+              <button 
+                key={w.id} 
+                onClick={() => { setActiveWorkplaceId(w.id); setIsOpen(false); }}
+                style={{ 
+                  textAlign: "left", padding: "0.5rem 0.75rem", 
+                  background: w.id === activeWorkplaceId ? "rgba(59, 130, 246, 0.1)" : "transparent",
+                  color: w.id === activeWorkplaceId ? "var(--color-primary)" : "var(--color-text-primary)",
+                  border: "none", borderRadius: "var(--radius-sm)", cursor: "pointer",
+                  fontSize: "0.875rem", fontWeight: w.id === activeWorkplaceId ? 600 : 400
+                }}
+                onMouseEnter={(e) => { if(w.id !== activeWorkplaceId) e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
+                onMouseLeave={(e) => { if(w.id !== activeWorkplaceId) e.currentTarget.style.background = "transparent"; }}
+              >
+                {w.name}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
@@ -25,6 +91,7 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("overview");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [newPass, setNewPass] = useState("");
   const [passMsg, setPassMsg] = useState("");
 
@@ -71,6 +138,7 @@ export default function DashboardPage() {
   if (user.role === "vigia") {
     return (
       <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "var(--color-bg)" }}>
+        <EmergencyBanner />
         <nav style={{ 
           display: "flex", justifyContent: "space-between", padding: "1rem 2rem", 
           backgroundColor: "var(--color-surface)", borderBottom: "1px solid var(--color-border)", alignItems: "center"
@@ -128,7 +196,9 @@ export default function DashboardPage() {
   };
 
   return (
-    <div style={{ height: "100vh", display: "flex", flexDirection: "row", background: "var(--color-bg)", overflow: "hidden" }}>
+    <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "var(--color-bg)", overflow: "hidden" }}>
+      <EmergencyBanner />
+      <div style={{ flex: 1, display: "flex", flexDirection: "row", overflow: "hidden" }}>
       
       {/* Mobile Sidebar Overlay */}
       <div 
@@ -190,16 +260,22 @@ export default function DashboardPage() {
             <Menu size={24} color="var(--color-text-primary)" />
           </button>
 
-          {/* User Welcome replacing search bar */}
-          <div style={{ flex: 1, margin: "0 1rem", fontSize: "1rem", color: "var(--color-text-secondary)", fontWeight: 500, display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <span>Olá,</span>
-            <span style={{ color: "var(--color-primary)", fontWeight: 600 }}>{user?.name || "Utilizador"}</span>
+          {/* User Welcome and Workplace Switcher */}
+          <div style={{ flex: 1, margin: "0 1rem", fontSize: "1rem", color: "var(--color-text-secondary)", fontWeight: 500, display: "flex", alignItems: "center", gap: "1rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <span className="hidden-mobile">Olá,</span>
+              <span style={{ color: "var(--color-primary)", fontWeight: 600 }}>{user?.name || "Utilizador"}</span>
+            </div>
+            {(user?.role === "captain" || user?.role === "superadmin") && <WorkplaceSwitcher />}
           </div>
 
           {/* User Actions Right */}
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <EmergencyControl />
             <HelpCircle size={24} color="var(--color-text-secondary)" style={{ cursor: "pointer", display: "none" }} className="hidden-mobile" />
-            <Settings size={24} color="var(--color-text-secondary)" style={{ cursor: "pointer", display: "none" }} className="hidden-mobile" />
+            {user?.role === "superadmin" && (
+              <Settings size={24} color="var(--color-text-secondary)" style={{ cursor: "pointer" }} onClick={() => setShowSettings(true)} title="Configurações Globais" />
+            )}
             
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginLeft: "0.5rem", cursor: "pointer" }} onClick={() => setShowProfile(true)} title="Definições da Conta">
                {/* Fake Avatar */}
@@ -305,6 +381,10 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Global Settings Modal */}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+
+      </div>
     </div>
   );
 }

@@ -8,6 +8,8 @@ import { Map, Image as ImageIcon } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
 
+import { useWorkplace } from "@/contexts/WorkplaceContext";
+
 interface Plan {
   id: string;
   name: string;
@@ -19,55 +21,31 @@ export default function PlanList() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  const { activeWorkplace, loadingWorkplaces } = useWorkplace();
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || loadingWorkplaces) return;
 
-    if (user.role === "captain") {
-      // 1. Fetch Zone for Captain
-      const qZone = query(collection(db, "workplaces"), where("captainId", "==", user.uid));
-      const unsubZone = onSnapshot(qZone, (zoneSnap) => {
-        if (zoneSnap.empty) {
-          setPlans([]);
-          setLoading(false);
-          return;
-        }
-        
-        const zoneData = zoneSnap.docs[0].data();
-        const planIds: string[] = zoneData.planIds || [];
-
-        if (planIds.length === 0) {
-          setPlans([]);
-          setLoading(false);
-          return;
-        }
-
-        // 2. Fetch all plans and filter
-        const unsubPlans = onSnapshot(collection(db, "plans"), (planSnap) => {
-          const plansData: Plan[] = [];
-          planSnap.forEach(doc => {
-            if (planIds.includes(doc.id)) {
-              plansData.push({ id: doc.id, ...doc.data() } as Plan);
-            }
-          });
-          setPlans(plansData);
-          setLoading(false);
-        });
-      });
-      return () => unsubZone();
-    } else {
-      // Super Admin sees everything
-      const unsubPlans = onSnapshot(collection(db, "plans"), (snapshot) => {
-        const plansData: Plan[] = [];
-        snapshot.forEach((doc) => {
-          plansData.push({ id: doc.id, ...doc.data() } as Plan);
-        });
-        setPlans(plansData);
-        setLoading(false);
-      });
-      return () => unsubPlans();
+    if (!activeWorkplace || !activeWorkplace.planIds || activeWorkplace.planIds.length === 0) {
+      setPlans([]);
+      setLoading(false);
+      return;
     }
-  }, [user]);
+
+    // Fetch all plans and filter by activeWorkplace.planIds
+    const unsubPlans = onSnapshot(collection(db, "plans"), (planSnap) => {
+      const plansData: Plan[] = [];
+      planSnap.forEach(doc => {
+        if (activeWorkplace.planIds.includes(doc.id)) {
+          plansData.push({ id: doc.id, ...doc.data() } as Plan);
+        }
+      });
+      setPlans(plansData);
+      setLoading(false);
+    });
+
+    return () => unsubPlans();
+  }, [user, activeWorkplace, loadingWorkplaces]);
 
   if (loading) return <div>A carregar plantas...</div>;
   if (plans.length === 0) return <div>Ainda não existem plantas.</div>;

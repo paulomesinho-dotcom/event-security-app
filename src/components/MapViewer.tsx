@@ -17,10 +17,11 @@ interface MapViewerProps {
   locators?: Locator[];
   onAddLocator?: (x: number, y: number) => void;
   onLocatorClick?: (locator: Locator) => void;
+  onLocatorDragEnd?: (locatorId: string, x: number, y: number) => void;
   isAddPinMode?: boolean;
 }
 
-export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLocatorClick, isAddPinMode }: MapViewerProps) {
+export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLocatorClick, onLocatorDragEnd, isAddPinMode }: MapViewerProps) {
   const [scale, setScale] = useState(1.0);
   const [natSize, setNatSize] = useState({ w: 0, h: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
@@ -33,6 +34,9 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
   const isDragging = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
   const [dragMoved, setDragMoved] = useState(false);
+  
+  // Pin Dragging state
+  const [draggingLocator, setDraggingLocator] = useState<{ id: string, x: number, y: number } | null>(null);
 
   // Pinch Zoom State
   const initialPinchDist = useRef<number | null>(null);
@@ -51,12 +55,9 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
   };
 
   const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
-    // We don't prevent default on touch so we don't break buttons, but we need to handle it carefully
-    if ('touches' in e && e.touches.length > 1) return; // handled by pinch
-    
+    if ('touches' in e && e.touches.length > 1) return;
     isDragging.current = true;
     setDragMoved(false);
-    
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
     lastPos.current = { x: clientX, y: clientY };
@@ -64,7 +65,7 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
 
   const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
     if (!isDragging.current || !containerRef.current) return;
-    if ('touches' in e && e.touches.length > 1) return; // handled by pinch
+    if ('touches' in e && e.touches.length > 1) return;
     
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
@@ -76,8 +77,20 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
       setDragMoved(true);
     }
     
-    containerRef.current.scrollLeft -= dx;
-    containerRef.current.scrollTop -= dy;
+    if (draggingLocator) {
+      setDraggingLocator(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          x: prev.x + dx / scaleRef.current,
+          y: prev.y + dy / scaleRef.current
+        };
+      });
+    } else {
+      containerRef.current.scrollLeft -= dx;
+      containerRef.current.scrollTop -= dy;
+    }
+
     lastPos.current = { x: clientX, y: clientY };
   };
 
@@ -85,7 +98,17 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
     if (!isDragging.current) return;
     isDragging.current = false;
 
-    // We only trigger clicks for Mouse events to avoid double firing on touch devices (which send click too)
+    if (draggingLocator) {
+      if (dragMoved && onLocatorDragEnd) {
+        onLocatorDragEnd(draggingLocator.id, draggingLocator.x, draggingLocator.y);
+      } else if (!dragMoved && onLocatorClick) {
+        const loc = locators.find(l => l.id === draggingLocator.id);
+        if (loc) onLocatorClick(loc);
+      }
+      setDraggingLocator(null);
+      return;
+    }
+
     if (!dragMoved && onAddLocator && 'clientX' in e) {
       const rect = e.currentTarget.getBoundingClientRect();
       const x = (e.clientX - rect.left) / scale;
@@ -96,6 +119,10 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
 
   const handleMouseLeave = () => {
     isDragging.current = false;
+    if (draggingLocator && dragMoved && onLocatorDragEnd) {
+      onLocatorDragEnd(draggingLocator.id, draggingLocator.x, draggingLocator.y);
+      setDraggingLocator(null);
+    }
   };
 
   // Pinch Zoom Logic
@@ -114,13 +141,9 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
     if (e.touches.length === 2 && initialPinchDist.current && containerRef.current) {
       const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
       const ratio = dist / initialPinchDist.current;
-      
       const newScale = Math.max(0.1, Math.min(initialScale.current * ratio, 5));
-      
-      // Center of pinch
       const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
       const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-      
       applyZoom(newScale, midX, midY);
     } else {
       handleMouseMove(e);
@@ -149,9 +172,6 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
 
     setScale(newScale);
 
-    // After setting scale, we need to adjust scroll so mouse stays at same spot.
-    // React state is async, but we can imperatively set scroll here by calculating what it WILL be.
-    // However, the DOM needs to update its width first. We use requestAnimationFrame to wait for render.
     requestAnimationFrame(() => {
       if (containerRef.current) {
          containerRef.current.scrollLeft = unscaledX * newScale - mouseX;
@@ -163,22 +183,18 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
   const handleWheel = (e: React.WheelEvent) => {
     if (e.deltaY !== 0) {
       const zoomFactor = 0.05;
-      // standard wheel: down is positive deltaY, means zoom out
       const delta = e.deltaY > 0 ? -zoomFactor : zoomFactor;
       const newScale = Math.max(0.1, Math.min(scaleRef.current + delta, 5));
-      
       applyZoom(newScale, e.clientX, e.clientY);
     }
   };
 
-  // Prevent wheel scroll from actually scrolling the div vertically
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const preventScroll = (e: WheelEvent) => {
        e.preventDefault();
     };
-    // touchmove shouldn't be prevented entirely or scrolling the page breaks, but we'll prevent default on pinch.
     const handleTouch = (e: TouchEvent) => {
        if (e.touches.length > 1) e.preventDefault();
     }
@@ -245,24 +261,46 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
           {/* Render Locators */}
           {locators.map((loc) => {
             const locColor = loc.color || "var(--color-danger)";
+            const isThisDragging = draggingLocator?.id === loc.id;
+            const displayX = isThisDragging ? draggingLocator.x : loc.x;
+            const displayY = isThisDragging ? draggingLocator.y : loc.y;
+            
             return (
               <div 
                 key={loc.id}
                 onMouseDown={(e) => {
                   e.stopPropagation();
+                  if (!onLocatorDragEnd) return;
+                  setDraggingLocator({ id: loc.id, x: loc.x, y: loc.y });
+                  isDragging.current = true;
+                  setDragMoved(false);
+                  
+                  const clientX = e.clientX;
+                  const clientY = e.clientY;
+                  lastPos.current = { x: clientX, y: clientY };
                 }}
-                onTouchStart={(e) => e.stopPropagation()}
+                onTouchStart={(e) => {
+                  e.stopPropagation();
+                  if (!onLocatorDragEnd || e.touches.length > 1) return;
+                  setDraggingLocator({ id: loc.id, x: loc.x, y: loc.y });
+                  isDragging.current = true;
+                  setDragMoved(false);
+                  
+                  const clientX = e.touches[0].clientX;
+                  const clientY = e.touches[0].clientY;
+                  lastPos.current = { x: clientX, y: clientY };
+                }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (onLocatorClick) onLocatorClick(loc);
+                  if (!isThisDragging && onLocatorClick) onLocatorClick(loc);
                 }}
                 style={{
                   position: "absolute",
-                  left: loc.x * scale,
-                  top: loc.y * scale,
+                  left: displayX * scale,
+                  top: displayY * scale,
                   transform: "translate(-50%, -100%)",
-                  cursor: "pointer",
-                  zIndex: 5
+                  cursor: isThisDragging ? "grabbing" : (onLocatorDragEnd ? "grab" : "pointer"),
+                  zIndex: isThisDragging ? 100 : 5
                 }}
                 title={loc.name}
               >

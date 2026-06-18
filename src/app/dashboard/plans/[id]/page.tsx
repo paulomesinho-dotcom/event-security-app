@@ -205,9 +205,23 @@ export default function PlanDetailPage() {
 
     // Save legacy Shift object for compatibility with current VigiaDashboard
     let shiftTimeStr = "";
-    if (selectedPeriod === "morning") shiftTimeStr = modelInfo?.morningTime || "Manhã";
-    if (selectedPeriod === "afternoon") shiftTimeStr = modelInfo?.afternoonTime || "Tarde";
-    if (selectedPeriod === "both") shiftTimeStr = `${modelInfo?.morningTime} e ${modelInfo?.afternoonTime}`;
+    if (selectedPeriod === "morning") {
+      const start = modelInfo?.morningStart || "?";
+      const end = modelInfo?.morningEnd || "?";
+      shiftTimeStr = `Manhã (${start} - ${end})`;
+    }
+    if (selectedPeriod === "afternoon") {
+      const start = modelInfo?.afternoonStart || "?";
+      const end = modelInfo?.afternoonEnd || "?";
+      shiftTimeStr = `Tarde (${start} - ${end})`;
+    }
+    if (selectedPeriod === "both") {
+      const mStart = modelInfo?.morningStart || "?";
+      const mEnd = modelInfo?.morningEnd || "?";
+      const aStart = modelInfo?.afternoonStart || "?";
+      const aEnd = modelInfo?.afternoonEnd || "?";
+      shiftTimeStr = `Manhã (${mStart} - ${mEnd}) e Tarde (${aStart} - ${aEnd})`;
+    }
 
     await addDoc(collection(db, "shifts"), {
        assignmentId: assignmentRefId,
@@ -243,6 +257,34 @@ export default function PlanDetailPage() {
     } catch (err) {
       console.error(err);
       alert("Erro ao remover a escala.");
+    }
+  };
+
+  const deleteLocator = async (locId: string) => {
+    if (!confirm("Tem a certeza que deseja apagar este pino e todas as escalas associadas?")) return;
+    try {
+      await deleteDoc(doc(db, "locators", locId));
+      // Delete associated assignments and shifts
+      const qAssignments = query(collection(db, "assignments"), where("locatorId", "==", locId));
+      const snapAssignments = await getDocs(qAssignments);
+      for (const d of snapAssignments.docs) {
+         await deleteDoc(doc(db, "assignments", d.id));
+      }
+      
+      const qShifts = query(collection(db, "shifts"), where("locatorId", "==", locId));
+      const snapShifts = await getDocs(qShifts);
+      for (const d of snapShifts.docs) {
+         await deleteDoc(doc(db, "shifts", d.id));
+      }
+
+      setLocators(prev => prev.filter(l => l.id !== locId));
+      setShowShiftModal(false);
+      setSelectedLocator(null);
+      setCurrentAssignments([]);
+      alert("Pino apagado com sucesso.");
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao apagar pino.");
     }
   };
 
@@ -282,6 +324,17 @@ export default function PlanDetailPage() {
   };
 
 
+  const handleLocatorDragEnd = async (locatorId: string, x: number, y: number) => {
+    if (user?.role !== "captain") return;
+    try {
+      await updateDoc(doc(db, "locators", locatorId), { x, y });
+      setLocators(prev => prev.map(l => l.id === locatorId ? { ...l, x, y } : l));
+    } catch (err) {
+      console.error("Erro ao mover o pino:", err);
+      alert("Erro ao guardar a nova posição do pino.");
+    }
+  };
+
   if (loading || !plan) return <div style={{ padding: "2rem" }}>A carregar a planta...</div>;
 
   return (
@@ -295,7 +348,7 @@ export default function PlanDetailPage() {
           <h2 style={{ margin: 0, marginBottom: "0.25rem" }}>{plan.name}</h2>
           {user?.role === "captain" && (
             <span style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>
-              Clique num pino existente para atribuir Vigias à escala.
+              Pode arrastar os pinos para os mover, ou clicar num para atribuir Vigias à escala.
             </span>
           )}
         </div>
@@ -315,6 +368,7 @@ export default function PlanDetailPage() {
          locators={locators} 
          onAddLocator={isAddPinMode ? handleAddLocatorClick : undefined} 
          onLocatorClick={handleLocatorClick} 
+         onLocatorDragEnd={handleLocatorDragEnd}
          isAddPinMode={isAddPinMode}
       />
 
@@ -369,7 +423,15 @@ export default function PlanDetailPage() {
       {showShiftModal && selectedLocator && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
           <div className="glass" style={{ background: "var(--color-surface)", padding: "2rem", borderRadius: "var(--radius-lg)", width: "100%", maxWidth: "450px" }}>
-            <h3 style={{ marginBottom: "1.5rem" }}>Gerir Escalas: {selectedLocator.name}</h3>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem" }}>
+              <h3 style={{ margin: 0 }}>Gerir Escalas: {selectedLocator.name}</h3>
+              <button 
+                onClick={(e) => { e.preventDefault(); deleteLocator(selectedLocator.id); }}
+                style={{ background: "rgba(239, 68, 68, 0.1)", color: "var(--color-danger)", border: "1px solid rgba(239, 68, 68, 0.3)", padding: "0.25rem 0.75rem", borderRadius: "var(--radius-sm)", cursor: "pointer", fontSize: "0.75rem", fontWeight: 600 }}
+              >
+                Apagar Pino
+              </button>
+            </div>
             {/* Lista de Escalas Atuais */}
             {currentAssignments.length > 0 && (
               <div style={{ marginBottom: "2rem" }}>

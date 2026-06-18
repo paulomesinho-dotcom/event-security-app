@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, addDoc } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWorkplace } from "@/contexts/WorkplaceContext";
 import { MapPin, Clock, CheckCircle2, PlayCircle, ShieldCheck, Bell, X } from "lucide-react";
 
 interface Shift {
@@ -68,8 +69,10 @@ export default function CaptainSummaryTable() {
     }
   };
 
+  const { activeWorkplace } = useWorkplace();
+
   useEffect(() => {
-    if (!user || user.role !== "captain") return;
+    if (!user || (user.role !== "captain" && user.role !== "superadmin") || !activeWorkplace) return;
 
     // Fetch all vigias to map IDs to Names
     const fetchUsers = async () => {
@@ -85,11 +88,21 @@ export default function CaptainSummaryTable() {
 
     fetchUsers();
 
-    // Fetch shifts created by this captain
-    const qShifts = query(collection(db, "shifts"), where("captainId", "==", user.uid));
+    // Fetch shifts that belong to plans in the active workplace
+    const qShifts = user.role === "superadmin" 
+      ? query(collection(db, "shifts"))
+      : query(collection(db, "shifts"), where("captainId", "==", user.uid));
+      
     const unsubscribeShifts = onSnapshot(qShifts, (snapshot) => {
       const shiftData: Shift[] = [];
-      snapshot.forEach(doc => shiftData.push({ id: doc.id, ...doc.data() } as Shift));
+      const planIds = activeWorkplace.planIds || [];
+      
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        if (planIds.includes(data.planId)) {
+          shiftData.push({ id: doc.id, ...data } as Shift);
+        }
+      });
       // Sort by status for better visibility
       shiftData.sort((a, b) => {
         if (a.status === "active" && b.status !== "active") return -1;
@@ -101,7 +114,7 @@ export default function CaptainSummaryTable() {
     });
 
     return () => unsubscribeShifts();
-  }, [user]);
+  }, [user, activeWorkplace]);
 
   if (loading) return <div style={{ padding: "2rem", textAlign: "center", color: "var(--color-text-secondary)" }}>A carregar dados do resumo...</div>;
 
