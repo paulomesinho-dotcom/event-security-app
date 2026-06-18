@@ -38,6 +38,46 @@ export default function PlanUploader() {
     return () => unsub();
   }, []);
 
+  const compressImage = (file: File): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new window.Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const MAX_WIDTH = 1920;
+          const MAX_HEIGHT = 1920;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height = Math.round(height * (MAX_WIDTH / width));
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width = Math.round(width * (MAX_HEIGHT / height));
+              height = MAX_HEIGHT;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx?.drawImage(img, 0, 0, width, height);
+          canvas.toBlob((blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error("Erro na compressão"));
+          }, "image/jpeg", 0.7); // 70% quality JPEG
+        };
+        img.onerror = (err) => reject(err);
+      };
+      reader.onerror = (err) => reject(err);
+    });
+  };
+
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file || !name) return;
@@ -45,49 +85,58 @@ export default function PlanUploader() {
     setUploading(true);
     setMessage("");
 
-    // Create a storage reference
-    const storageRef = ref(storage, `plans/${Date.now()}_${file.name}`);
-    const uploadTask = uploadBytesResumable(storageRef, file);
+    try {
+      // Compress image before upload
+      const compressedBlob = await compressImage(file);
 
-    uploadTask.on(
-      "state_changed",
-      (snapshot) => {
-        const prog = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-        setProgress(prog);
-      },
-      (error) => {
-        console.error("Upload error:", error);
-        setMessage("Erro ao fazer upload da planta.");
-        setUploading(false);
-      },
-      async () => {
-        // Upload completed successfully, now we can get the download URL
-        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-        
-        // Save metadata to Firestore
-        try {
-          await addDoc(collection(db, "plans"), {
-            name,
-            imageUrl: downloadURL,
-            createdAt: serverTimestamp(),
-          });
-          setMessage("Upload concluído com sucesso!");
-          setFile(null);
-          setName("");
-          setProgress(0);
+      // Create a storage reference
+      const storageRef = ref(storage, `plans/${Date.now()}_${file.name.split('.')[0]}.jpg`);
+      const uploadTask = uploadBytesResumable(storageRef, compressedBlob);
+
+      uploadTask.on(
+        "state_changed",
+        (snapshot) => {
+          const prog = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+          setProgress(prog);
+        },
+        (error) => {
+          console.error("Upload error:", error);
+          setMessage("Erro ao fazer upload da planta.");
+          setUploading(false);
+        },
+        async () => {
+          // Upload completed successfully, now we can get the download URL
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
           
-          // Clear message and close modal after success
-          setTimeout(() => {
-             setMessage("");
-             setShowModal(false);
-          }, 1500);
-        } catch (dbError) {
-          console.error("Database error:", dbError);
-          setMessage("Ficheiro carregado, mas erro ao guardar na base de dados.");
+          // Save metadata to Firestore
+          try {
+            await addDoc(collection(db, "plans"), {
+              name,
+              imageUrl: downloadURL,
+              createdAt: serverTimestamp(),
+            });
+            setMessage("Planta carregada com sucesso!");
+            setFile(null);
+            setName("");
+            
+            // Opcional: Reset the file input visually
+            const fileInput = document.getElementById('plan-file-input') as HTMLInputElement;
+            if (fileInput) fileInput.value = '';
+            
+            setTimeout(() => setShowModal(false), 1500);
+          } catch (err) {
+            console.error(err);
+            setMessage("Erro ao guardar na base de dados.");
+          } finally {
+            setUploading(false);
+          }
         }
-        setUploading(false);
-      }
-    );
+      );
+    } catch (err) {
+      console.error("Erro na compressão:", err);
+      setMessage("Erro ao processar e comprimir a imagem.");
+      setUploading(false);
+    }
   };
 
   const handleDelete = async (plan: Plan) => {
