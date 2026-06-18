@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { LogOut, LayoutDashboard, Users, Map, Settings, Clock, MapPin, Building, Plus, Search, HelpCircle, Menu, ChevronDown, AlertTriangle } from "lucide-react";
+import { LogOut, LayoutDashboard, Users, Map, Settings, Clock, MapPin, Building, Plus, Search, HelpCircle, Menu, ChevronDown, AlertTriangle, FileWarning } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { updatePassword } from "firebase/auth";
 
@@ -20,6 +20,7 @@ import LocationManager from "@/components/LocationManager";
 import SettingsModal from "@/components/SettingsModal";
 import EmergencyBanner from "@/components/EmergencyBanner";
 import EmergencyControl from "@/components/EmergencyControl";
+import IncidentManager from "@/components/IncidentManager";
 import { useWorkplace } from "@/contexts/WorkplaceContext";
 
 function WorkplaceSwitcher() {
@@ -235,6 +236,7 @@ export default function DashboardPage() {
               <NavItem id="models" icon={Clock} label="Modelos de Turno" />
               <NavItem id="locations" icon={MapPin} label="Estrutura de Locais" />
               <NavItem id="plans" icon={Map} label="Plantas & Escalas" />
+              <NavItem id="incidents" icon={FileWarning} label="Ocorrências" />
               <div style={{ height: "1px", background: "rgba(255,255,255,0.1)", margin: "0.5rem 1rem" }} />
               <NavItem id="summary" icon={LayoutDashboard} label="Resumo Global" />
             </>
@@ -311,6 +313,7 @@ export default function DashboardPage() {
               {activeTab === 'team' && "Equipa do Local"}
               {activeTab === 'models' && "Modelos de Turno"}
               {activeTab === 'locations' && "Estrutura de Locais"}
+              {activeTab === 'incidents' && "Gestão de Ocorrências"}
               {activeTab === 'summary' && "Resumo Global"}
             </h2>
 
@@ -329,6 +332,7 @@ export default function DashboardPage() {
                 {activeTab === "team" && <TeamManager />}
                 {activeTab === "models" && <ShiftModelManager />}
                 {activeTab === "locations" && <LocationManager />}
+                {activeTab === "incidents" && <IncidentManager />}
                 
                 {activeTab === "plans" && (
                   <div>

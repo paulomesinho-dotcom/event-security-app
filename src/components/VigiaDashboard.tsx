@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, updateDoc, getDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, updateDoc, getDoc, addDoc } from "firebase/firestore";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useAuth } from "@/contexts/AuthContext";
-import { MapPin, Play, Square, Clock, Calendar, CheckCircle2, AlertTriangle, X, Bell } from "lucide-react";
+import { MapPin, Play, Square, Clock, Calendar, CheckCircle2, AlertTriangle, X, Bell, FileWarning } from "lucide-react";
 import { requestNotificationPermission, onForegroundMessage } from "@/lib/firebase-messaging";
 
 import dynamic from "next/dynamic";
@@ -136,6 +137,12 @@ export default function VigiaDashboard() {
   const [shiftLocator, setShiftLocator] = useState<Locator | null>(null);
   const [endAlertFired, setEndAlertFired] = useState<Set<string>>(new Set());
 
+  // Incident Reporting
+  const [showIncidentModal, setShowIncidentModal] = useState(false);
+  const [incidentText, setIncidentText] = useState("");
+  const [incidentPhoto, setIncidentPhoto] = useState<File | null>(null);
+  const [incidentUploading, setIncidentUploading] = useState(false);
+
   useEffect(() => {
     if (!user) return;
     const qShifts = query(collection(db, "shifts"), where("personId", "==", user.uid));
@@ -153,10 +160,8 @@ export default function VigiaDashboard() {
       notifs.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       setNotifications(notifs);
     });
-    // Request FCM permission and save token
     requestNotificationPermission(user.uid);
 
-    // Listen for foreground FCM messages (app is open)
     const unsubFcm = onForegroundMessage((payload) => {
       const msg = payload.notification?.body || payload.data?.message || "Nova mensagem do Capitão";
       setFcmBanner(msg);
@@ -194,17 +199,54 @@ export default function VigiaDashboard() {
   };
 
   const updateShiftStatus = async (shift: Shift, newStatus: "active" | "completed") => {
-    if (newStatus === "active") {
-      const check = isWithinShiftTime(shift);
-      if (!check.allowed) {
-        alert(`Não é possível iniciar o turno.\n\n${check.reason}`);
-        return;
-      }
-    }
     try {
+      if (newStatus === "active") {
+        const check = isWithinShiftTime(shift);
+        if (!check.allowed) {
+          alert(`Não é possível iniciar o turno.\n\n${check.reason}`);
+          return;
+        }
+      }
       await updateDoc(doc(db, "shifts", shift.id), { status: newStatus });
     } catch (e) {
       alert("Erro a atualizar o turno.");
+    }
+  };
+
+  const activeShift = shifts.find(s => s.status === "active");
+  const activeWorkplace = activeShift ? workplaces.find(w => w.planIds?.includes(activeShift.planId)) : null;
+
+  const submitIncident = async () => {
+    if (!activeShift || !activeWorkplace) return alert("Precisa de ter um turno ativo para reportar ocorrências.");
+    if (!incidentText) return alert("Descreva a ocorrência.");
+    setIncidentUploading(true);
+    try {
+      let photoUrl = "";
+      if (incidentPhoto) {
+        const storage = getStorage();
+        const fileRef = ref(storage, `incidents/${user?.uid}_${Date.now()}`);
+        await uploadBytes(fileRef, incidentPhoto);
+        photoUrl = await getDownloadURL(fileRef);
+      }
+      await addDoc(collection(db, "incidents"), {
+        vigiaId: user?.uid,
+        shiftId: activeShift.id,
+        locatorName: activeShift.locatorName,
+        workplaceId: activeWorkplace.id,
+        message: incidentText,
+        photoUrl,
+        status: "open",
+        createdAt: new Date().toISOString()
+      });
+      setShowIncidentModal(false);
+      setIncidentText("");
+      setIncidentPhoto(null);
+      alert("Ocorrência enviada ao Capitão com sucesso.");
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao enviar ocorrência.");
+    } finally {
+      setIncidentUploading(false);
     }
   };
 
@@ -215,18 +257,12 @@ export default function VigiaDashboard() {
     </div>
   );
 
-  const activeShift = shifts.find(s => s.status === "active");
   const pendingShifts = shifts.filter(s => s.status === "pending");
   const completedShifts = shifts.filter(s => s.status === "completed");
-
-  // Find Zello Link for Active Shift
-  const activeWorkplace = activeShift ? workplaces.find(w => w.planIds?.includes(activeShift.planId)) : null;
   const zelloLink = activeWorkplace?.zelloChannelLink;
 
   return (
     <div className="animate-fade-in" style={{ maxWidth: "860px", margin: "0 auto", padding: "0 0.25rem" }}>
-
-      {/* FCM Foreground push banner (when app is open and FCM arrives) */}
       {fcmBanner && (
         <div style={{ marginBottom: "1rem", display: "flex", gap: "0.75rem", alignItems: "flex-start", padding: "0.9rem 1rem", background: "linear-gradient(135deg, #1e1b4b, #312e81)", borderRadius: "var(--radius-lg)", color: "white", boxShadow: "0 4px 20px rgba(99,102,241,0.4)", animation: "slideDown 0.3s ease" }}>
           <Bell size={18} style={{ flexShrink: 0, marginTop: "0.1rem", color: "#a5b4fc" }} />
@@ -240,7 +276,6 @@ export default function VigiaDashboard() {
         </div>
       )}
 
-      {/* Firestore Notifications (persistent until read) */}
       {notifications.length > 0 && (
         <div style={{ marginBottom: "1.5rem", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "var(--shadow-md)" }}>
           {notifications.map(n => (
@@ -265,39 +300,27 @@ export default function VigiaDashboard() {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
-
-          {/* ZELLO BUTTON (If available for the active workplace) */}
-          {zelloLink && activeShift && (
-            <a 
-              href={zelloLink}
-              style={{
-                display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.5rem",
-                background: "rgba(249, 115, 22, 0.15)", // Subtle orange
-                color: "#f97316", padding: "0.6rem 1rem", borderRadius: "var(--radius-md)",
-                textDecoration: "none", fontWeight: 600, fontSize: "0.85rem",
-                border: "1px solid rgba(249, 115, 22, 0.3)",
-                marginBottom: "0.5rem"
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Play size={16} fill="currentColor" />
-              </div>
-              Abrir Rádio (Zello)
-            </a>
+          {activeShift && (
+            <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem" }}>
+              {zelloLink && (
+                <a href={zelloLink} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", background: "rgba(249, 115, 22, 0.15)", color: "#f97316", padding: "0.6rem 1rem", borderRadius: "var(--radius-md)", textDecoration: "none", fontWeight: 600, fontSize: "0.85rem", border: "1px solid rgba(249, 115, 22, 0.3)", flex: 1 }}>
+                  <Play size={16} fill="currentColor" /> Rádio
+                </a>
+              )}
+              <button onClick={() => setShowIncidentModal(true)} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", background: "#ef4444", color: "white", padding: "0.6rem 1rem", borderRadius: "var(--radius-md)", border: "none", fontWeight: 600, fontSize: "0.85rem", flex: 1, cursor: "pointer" }}>
+                <FileWarning size={16} /> Ocorrência
+              </button>
+            </div>
           )}
 
-          {/* ACTIVE SHIFT */}
           {activeShift && (
             <section>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
                 <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#10b981", animation: "pulse 2s infinite" }} />
                 <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--color-text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Turno em Curso</span>
               </div>
-
               <div style={{ background: "linear-gradient(135deg, #151F31 0%, #1e3a5f 100%)", borderRadius: "var(--radius-lg)", padding: "1.25rem", color: "white", boxShadow: "0 8px 32px rgba(21,31,49,0.35)", position: "relative", overflow: "hidden" }}>
                 <div style={{ position: "absolute", top: "-20px", right: "-20px", width: "120px", height: "120px", borderRadius: "50%", background: "rgba(255,255,255,0.04)", pointerEvents: "none" }} />
-
-                {/* Header row */}
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.75rem", marginBottom: "1rem" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", flex: 1, minWidth: 0 }}>
                     <div style={{ background: "rgba(16,185,129,0.2)", padding: "0.55rem", borderRadius: "50%", flexShrink: 0 }}>
@@ -308,7 +331,6 @@ export default function VigiaDashboard() {
                       <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{activeShift.locatorName}</h3>
                     </div>
                   </div>
-                  {/* Action buttons stacked */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", flexShrink: 0 }}>
                     <button onClick={() => viewMap(activeShift)} style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 0.8rem", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "var(--radius-md)", color: "white", cursor: "pointer", fontSize: "0.8rem", fontWeight: 600, whiteSpace: "nowrap" }}>
                       <MapPin size={14} /> Planta
@@ -318,168 +340,71 @@ export default function VigiaDashboard() {
                     </button>
                   </div>
                 </div>
-
-                {/* Info grid — wraps on mobile */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "0.5rem" }}>
-                  {activeShift.name && (
-                    <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "var(--radius-md)", padding: "0.6rem 0.75rem" }}>
-                      <p style={{ margin: 0, fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.15rem", fontWeight: 600 }}>DESIGNAÇÃO</p>
-                      <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 600 }}>{activeShift.name}</p>
-                    </div>
-                  )}
-                  {activeShift.time && (
-                    <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "var(--radius-md)", padding: "0.6rem 0.75rem" }}>
-                      <p style={{ margin: 0, fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.15rem", fontWeight: 600 }}>HORÁRIO</p>
-                      <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 600 }}>{activeShift.time}</p>
-                    </div>
-                  )}
-                  {activeShift.days && (
-                    <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "var(--radius-md)", padding: "0.6rem 0.75rem" }}>
-                      <p style={{ margin: 0, fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.15rem", fontWeight: 600 }}>DATA</p>
-                      <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 600 }}>{activeShift.days}</p>
-                    </div>
-                  )}
                   <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "var(--radius-md)", padding: "0.6rem 0.75rem" }}>
                     <p style={{ margin: 0, fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.15rem", fontWeight: 600 }}>INICIADO</p>
                     <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 600 }}>{new Date(activeShift.startTime).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}</p>
                   </div>
                 </div>
-
-                {isNearingEnd(activeShift) && (
-                  <div style={{ marginTop: "0.75rem", padding: "0.6rem 0.9rem", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: "var(--radius-md)", display: "flex", alignItems: "center", gap: "0.5rem", color: "#fcd34d" }}>
-                    <AlertTriangle size={14} />
-                    <span style={{ fontSize: "0.82rem", fontWeight: 500 }}>O seu turno está prestes a terminar!</span>
-                  </div>
-                )}
               </div>
             </section>
           )}
 
-          {/* PENDING SHIFTS */}
           {pendingShifts.length > 0 && (
             <section>
               <span style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "var(--color-text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "0.75rem" }}>Próximos Turnos</span>
-
               <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
                 {pendingShifts.map(shift => {
                   const timeCheck = isWithinShiftTime(shift);
                   const startTime = getShiftStartTime(shift);
                   const disabled = !!activeShift || !timeCheck.allowed;
-
                   return (
                     <div key={shift.id} style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "var(--shadow-sm)" }}>
-                      {/* Top accent stripe */}
                       <div style={{ height: "3px", background: timeCheck.allowed ? "linear-gradient(90deg, #10b981, #34d399)" : "linear-gradient(90deg, #f59e0b, #fbbf24)" }} />
-
                       <div style={{ padding: "1rem 1.1rem" }}>
-                        {/* Row 1: name + badge */}
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.6rem" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
-                            <MapPin size={16} color="var(--color-primary)" style={{ flexShrink: 0 }} />
-                            <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "var(--color-text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{shift.locatorName}</h4>
-                          </div>
+                          <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700 }}>{shift.locatorName}</h4>
                           <StatusBadge status="pending" />
                         </div>
-
-                        {/* Hora de início destacada */}
-                        {startTime && (
-                          <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.5rem", background: "var(--color-primary-light)", padding: "0.3rem 0.7rem", borderRadius: "var(--radius-md)" }}>
-                            <Clock size={13} color="var(--color-primary)" />
-                            <span style={{ fontSize: "0.88rem", fontWeight: 700, color: "var(--color-primary)" }}>Início: {startTime}</span>
-                          </div>
-                        )}
-
-                        {/* Meta info */}
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem 0.9rem", marginBottom: "0.75rem" }}>
-                          {shift.name && <span style={{ fontSize: "0.78rem", color: "var(--color-text-secondary)" }}>{shift.name}</span>}
-                          {shift.days && <span style={{ fontSize: "0.78rem", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "0.2rem" }}><Calendar size={11} />{shift.days}</span>}
-                          {shift.time && <span style={{ fontSize: "0.78rem", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "0.2rem" }}><Clock size={11} />{shift.time}</span>}
-                        </div>
-
-                        {/* Restriction warning */}
-                        {!timeCheck.allowed && (
-                          <div style={{ display: "flex", alignItems: "flex-start", gap: "0.4rem", padding: "0.5rem 0.65rem", background: "rgba(245,158,11,0.08)", borderRadius: "var(--radius-md)", marginBottom: "0.75rem" }}>
-                            <AlertTriangle size={13} color="#d97706" style={{ flexShrink: 0, marginTop: "0.1rem" }} />
-                            <span style={{ fontSize: "0.76rem", color: "#d97706", fontWeight: 500 }}>{timeCheck.reason}</span>
-                          </div>
-                        )}
-
-                        {/* Action buttons — full width on mobile */}
-                        <div style={{ display: "flex", gap: "0.5rem" }}>
-                          <button onClick={() => viewMap(shift)} className="btn btn-secondary" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35rem", fontSize: "0.82rem", padding: "0.5rem" }}>
-                            <MapPin size={14} /> Planta
-                          </button>
-                          <button
-                            onClick={() => updateShiftStatus(shift, "active")}
-                            disabled={disabled}
-                            style={{
-                              flex: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem",
-                              padding: "0.5rem", fontSize: "0.85rem", fontWeight: 700, border: "none", borderRadius: "var(--radius-md)", cursor: disabled ? "not-allowed" : "pointer",
-                              background: disabled ? "var(--color-bg)" : "var(--color-success)",
-                              color: disabled ? "var(--color-text-tertiary)" : "white",
-                              boxShadow: disabled ? "none" : "0 4px 12px rgba(16,185,129,0.3)"
-                            }}
-                            title={!timeCheck.allowed ? timeCheck.reason : ""}
-                          >
-                            <Play size={14} fill="currentColor" /> Iniciar Turno
-                          </button>
-                        </div>
+                        <button onClick={() => updateShiftStatus(shift, "active")} disabled={disabled} style={{ width: "100%", padding: "0.6rem", fontSize: "0.85rem", fontWeight: 700, border: "none", borderRadius: "var(--radius-md)", cursor: disabled ? "not-allowed" : "pointer", background: disabled ? "#e5e7eb" : "#10b981", color: disabled ? "#6b7280" : "white" }}>
+                          <Play size={14} fill="currentColor" style={{ display: "inline-block", marginRight: "0.3rem" }} /> Iniciar Turno
+                        </button>
                       </div>
                     </div>
                   );
                 })}
               </div>
-
-              {!!activeShift && (
-                <p style={{ fontSize: "0.78rem", color: "var(--color-text-tertiary)", marginTop: "0.5rem", display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                  <AlertTriangle size={12} /> Termine o turno atual para poder iniciar outro.
-                </p>
-              )}
             </section>
           )}
-
-          {/* COMPLETED */}
-          {completedShifts.length > 0 && (
-            <section>
-              <span style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "var(--color-text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "0.75rem" }}>Turnos Concluídos</span>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                {completedShifts.map(shift => (
-                  <div key={shift.id} style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", padding: "0.8rem 1rem", display: "flex", alignItems: "center", gap: "0.75rem", opacity: 0.65 }}>
-                    <CheckCircle2 size={16} color="var(--color-success)" style={{ flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ fontWeight: 600, fontSize: "0.88rem", display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{shift.locatorName}</span>
-                      {shift.days && <span style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)" }}>{shift.days}</span>}
-                    </div>
-                    <StatusBadge status="completed" />
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
         </div>
       )}
 
-      {/* MAP MODAL — full screen on mobile */}
+      {showIncidentModal && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-lg)", width: "100%", maxWidth: "400px", overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1rem 1.5rem", borderBottom: "1px solid var(--color-border)", background: "#ef4444", color: "white" }}>
+              <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}><FileWarning size={18}/> Reportar Ocorrência</h3>
+              <button onClick={() => setShowIncidentModal(false)} style={{ background: "none", border: "none", color: "white", cursor: "pointer" }}><X size={20}/></button>
+            </div>
+            <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.5rem", fontWeight: 600 }}>Descrição da Ocorrência *</label>
+                <textarea rows={4} value={incidentText} onChange={e => setIncidentText(e.target.value)} placeholder="Descreva o que se está a passar..." style={{ width: "100%", padding: "0.5rem", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", resize: "none" }}></textarea>
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.5rem", fontWeight: 600 }}>Anexar Fotografia (Opcional)</label>
+                <input type="file" accept="image/*" capture="environment" onChange={e => setIncidentPhoto(e.target.files?.[0] || null)} style={{ width: "100%" }} />
+              </div>
+              <button onClick={submitIncident} disabled={incidentUploading || !incidentText} style={{ width: "100%", padding: "1rem", background: "#ef4444", color: "white", border: "none", borderRadius: "var(--radius-md)", fontWeight: 700, cursor: "pointer", opacity: incidentUploading || !incidentText ? 0.5 : 1 }}>
+                {incidentUploading ? "A ENVIAR..." : "ENVIAR RELATÓRIO AO CAPITÃO"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showMapForShift && shiftPlanUrl && shiftLocator && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.9)", zIndex: 200, display: "flex", flexDirection: "column" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.85rem 1rem", background: "#151F31", color: "white", flexShrink: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", minWidth: 0 }}>
-              <div style={{ background: "rgba(255,255,255,0.1)", padding: "0.45rem", borderRadius: "var(--radius-md)", flexShrink: 0 }}>
-                <MapPin size={18} color="#a5b4fc" />
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", fontWeight: 600 }}>A SUA POSIÇÃO</p>
-                <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{shiftLocator.name}</h3>
-              </div>
-            </div>
-            <button onClick={() => setShowMapForShift(null)} style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 0.75rem", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "var(--radius-md)", color: "white", cursor: "pointer", fontWeight: 600, fontSize: "0.8rem", flexShrink: 0 }}>
-              <X size={15} /> Fechar
-            </button>
-          </div>
-
-          {showMapForShift.time && (
-            <div style={{ padding: "0.5rem 1rem", background: "rgba(21,31,49,0.85)", color: "rgba(255,255,255,0.6)", fontSize: "0.78rem", display: "flex", gap: "1.25rem", flexShrink: 0, flexWrap: "wrap" }}>
               {showMapForShift.name && <span>📋 {showMapForShift.name}</span>}
               <span>🕐 {showMapForShift.time}</span>
               {showMapForShift.days && <span>📅 {showMapForShift.days}</span>}
