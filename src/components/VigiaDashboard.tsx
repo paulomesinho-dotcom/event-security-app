@@ -271,18 +271,18 @@ export default function VigiaDashboard() {
             <a 
               href={zelloLink}
               style={{
-                display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem",
-                background: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)", // Orange Zello color vibe
-                color: "white", padding: "1.2rem", borderRadius: "var(--radius-lg)",
-                textDecoration: "none", fontWeight: "bold", fontSize: "1.1rem",
-                boxShadow: "0 4px 15px rgba(234, 88, 12, 0.4)",
-                animation: "pulse 3s infinite"
+                display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.5rem",
+                background: "rgba(249, 115, 22, 0.15)", // Subtle orange
+                color: "#f97316", padding: "0.6rem 1rem", borderRadius: "var(--radius-md)",
+                textDecoration: "none", fontWeight: 600, fontSize: "0.85rem",
+                border: "1px solid rgba(249, 115, 22, 0.3)",
+                marginBottom: "0.5rem"
               }}
             >
-              <div style={{ background: "rgba(255,255,255,0.2)", padding: "0.4rem", borderRadius: "50%" }}>
-                <Play size={24} fill="currentColor" />
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Play size={16} fill="currentColor" />
               </div>
-              ABRIR RÁDIO (ZELLO)
+              Abrir Rádio (Zello)
             </a>
           )}
 
