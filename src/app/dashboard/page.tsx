@@ -222,13 +222,16 @@ export default function DashboardPage() {
             <>
               <NavItem id="workplaces" icon={Building} label="Workplaces" />
               <NavItem id="users" icon={Users} label="Gestão de Acessos" />
-              <NavItem id="plans" icon={Map} label="Biblioteca de Plantas" />
+              <NavItem id="global_plans" icon={Map} label="Biblioteca de Plantas" />
+              
+              <div style={{ height: "1px", background: "rgba(255,255,255,0.1)", margin: "0.5rem 1rem" }} />
+              <div style={{ padding: "0.25rem 1rem", fontSize: "0.65rem", color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>Workplace Atual</div>
             </>
           )}
 
-          {user.role === "captain" && (
+          {(user.role === "captain" || user.role === "superadmin") && (
             <>
-              <NavItem id="team" icon={Users} label="A Minha Equipa" />
+              <NavItem id="team" icon={Users} label="Equipa do Local" />
               <NavItem id="models" icon={Clock} label="Modelos de Turno" />
               <NavItem id="locations" icon={MapPin} label="Estrutura de Locais" />
               <NavItem id="plans" icon={Map} label="Plantas & Escalas" />
@@ -303,8 +306,9 @@ export default function DashboardPage() {
             <h2 style={{ marginBottom: "1.5rem", color: "var(--color-text-primary)", fontWeight: 400, fontSize: "1.25rem" }}>
               {activeTab === 'workplaces' && "Gestão de Workplaces"}
               {activeTab === 'users' && "Gestão de Acessos"}
-              {activeTab === 'plans' && (user.role === "superadmin" ? "Biblioteca Global de Plantas" : "Plantas & Escalas")}
-              {activeTab === 'team' && "A Minha Equipa"}
+              {activeTab === 'global_plans' && "Biblioteca Global de Plantas"}
+              {activeTab === 'plans' && "Plantas & Escalas do Workplace"}
+              {activeTab === 'team' && "Equipa do Local"}
               {activeTab === 'models' && "Modelos de Turno"}
               {activeTab === 'locations' && "Estrutura de Locais"}
               {activeTab === 'summary' && "Resumo Global"}
@@ -315,12 +319,12 @@ export default function DashboardPage() {
               <div className="animate-fade-in">
                 {activeTab === "workplaces" && <WorkplaceManager />}
                 {activeTab === "users" && <UserManager />}
-                {activeTab === "plans" && <PlanUploader />}
+                {activeTab === "global_plans" && <PlanUploader />}
               </div>
             )}
 
-            {/* CAPTAIN ROUTING */}
-            {user.role === "captain" && (
+            {/* SHARED ROUTING (Captain + Superadmin Workplace context) */}
+            {(user.role === "captain" || user.role === "superadmin") && (
               <div className="animate-fade-in">
                 {activeTab === "team" && <TeamManager />}
                 {activeTab === "models" && <ShiftModelManager />}
