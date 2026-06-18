@@ -44,17 +44,22 @@ interface Locator {
 }
 
 function getShiftStartTime(shift: Shift): string {
-  if (!shift.period) return shift.time || "";
-  if (shift.period === "morning" || shift.period === "both") return shift.morningStart || "";
-  if (shift.period === "afternoon") return shift.afternoonStart || "";
+  if (shift.morningStart && (shift.period === "morning" || shift.period === "both")) return shift.morningStart;
+  if (shift.afternoonStart && shift.period === "afternoon") return shift.afternoonStart;
+  if (shift.time && shift.time.includes("(")) {
+    const match = shift.time.match(/\((.*?)\s*-/);
+    if (match) return match[1].trim();
+  }
   return shift.time || "";
 }
 
 function getShiftEndTime(shift: Shift): string {
-  if (!shift.period) return "";
-  if (shift.period === "afternoon") return shift.afternoonEnd || "";
-  if (shift.period === "morning") return shift.morningEnd || "";
-  if (shift.period === "both") return shift.afternoonEnd || "";
+  if (shift.afternoonEnd && (shift.period === "afternoon" || shift.period === "both")) return shift.afternoonEnd;
+  if (shift.morningEnd && shift.period === "morning") return shift.morningEnd;
+  if (shift.time && shift.time.includes("-")) {
+    const match = shift.time.match(/-\s*(.*?)\)/);
+    if (match) return match[1].trim();
+  }
   return "";
 }
 
@@ -265,8 +270,6 @@ export default function VigiaDashboard() {
           {zelloLink && activeShift && (
             <a 
               href={zelloLink}
-              target="_blank"
-              rel="noopener noreferrer"
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem",
                 background: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)", // Orange Zello color vibe
