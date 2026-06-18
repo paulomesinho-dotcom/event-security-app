@@ -122,6 +122,7 @@ function StatusBadge({ status }: { status: string }) {
 export default function VigiaDashboard() {
   const { user } = useAuth();
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [workplaces, setWorkplaces] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [fcmBanner, setFcmBanner] = useState<string | null>(null);
@@ -157,7 +158,11 @@ export default function VigiaDashboard() {
       setTimeout(() => setFcmBanner(null), 8000);
     });
 
-    return () => { unsubShifts(); unsubNotifs(); unsubFcm(); };
+    const unsubWorkplaces = onSnapshot(collection(db, "workplaces"), (snap) => {
+      setWorkplaces(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    return () => { unsubShifts(); unsubNotifs(); unsubFcm(); unsubWorkplaces(); };
   }, [user]);
 
   useEffect(() => {
@@ -209,6 +214,10 @@ export default function VigiaDashboard() {
   const pendingShifts = shifts.filter(s => s.status === "pending");
   const completedShifts = shifts.filter(s => s.status === "completed");
 
+  // Find Zello Link for Active Shift
+  const activeWorkplace = activeShift ? workplaces.find(w => w.planIds?.includes(activeShift.planId)) : null;
+  const zelloLink = activeWorkplace?.zelloChannelLink;
+
   return (
     <div className="animate-fade-in" style={{ maxWidth: "860px", margin: "0 auto", padding: "0 0.25rem" }}>
 
@@ -251,6 +260,28 @@ export default function VigiaDashboard() {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
+
+          {/* ZELLO BUTTON (If available for the active workplace) */}
+          {zelloLink && activeShift && (
+            <a 
+              href={zelloLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem",
+                background: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)", // Orange Zello color vibe
+                color: "white", padding: "1.2rem", borderRadius: "var(--radius-lg)",
+                textDecoration: "none", fontWeight: "bold", fontSize: "1.1rem",
+                boxShadow: "0 4px 15px rgba(234, 88, 12, 0.4)",
+                animation: "pulse 3s infinite"
+              }}
+            >
+              <div style={{ background: "rgba(255,255,255,0.2)", padding: "0.4rem", borderRadius: "50%" }}>
+                <Play size={24} fill="currentColor" />
+              </div>
+              ABRIR RÁDIO (ZELLO)
+            </a>
+          )}
 
           {/* ACTIVE SHIFT */}
           {activeShift && (

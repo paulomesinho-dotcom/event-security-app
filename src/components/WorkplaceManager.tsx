@@ -10,6 +10,7 @@ interface Workplace {
   name: string;
   captainId: string;
   planIds: string[];
+  zelloChannelLink?: string;
 }
 
 interface User {
@@ -33,6 +34,7 @@ export default function WorkplaceManager() {
   const [showNewWorkplace, setShowNewWorkplace] = useState(false);
   const [newWorkplaceName, setNewWorkplaceName] = useState("");
   const [newWorkplaceCaptain, setNewWorkplaceCaptain] = useState("");
+  const [newWorkplaceZelloLink, setNewWorkplaceZelloLink] = useState("");
 
   // Edit Workplace State
   const [editingWorkplace, setEditingWorkplace] = useState<Workplace | null>(null);
@@ -72,9 +74,11 @@ export default function WorkplaceManager() {
       name: newWorkplaceName,
       captainId: newWorkplaceCaptain,
       planIds: [],
+      zelloChannelLink: newWorkplaceZelloLink
     });
     setNewWorkplaceName("");
     setNewWorkplaceCaptain("");
+    setNewWorkplaceZelloLink("");
     setShowNewWorkplace(false);
   };
 
@@ -119,6 +123,10 @@ export default function WorkplaceManager() {
                 {captains.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>Link Canal Zello (Opcional)</label>
+              <input type="text" className="input" value={newWorkplaceZelloLink} onChange={e => setNewWorkplaceZelloLink(e.target.value)} placeholder="ex: zello://porto2026" />
+            </div>
           </div>
           <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
             <button className="btn btn-success" onClick={handleCreateWorkplace} disabled={!newWorkplaceName || !newWorkplaceCaptain}>Gravar</button>
@@ -159,6 +167,16 @@ export default function WorkplaceManager() {
                     
                     {/* Plans Assignment */}
                     <div style={{ flex: "1 1 300px" }}>
+                      <h5 style={{ marginBottom: "0.5rem" }}>Link Zello (Opcional)</h5>
+                      <input 
+                        type="text" 
+                        className="input" 
+                        defaultValue={workplace.zelloChannelLink || ""} 
+                        onBlur={(e) => updateDoc(doc(db, "workplaces", workplace.id), { zelloChannelLink: e.target.value })}
+                        placeholder="zello://canal-seguranca"
+                        style={{ marginBottom: "1.5rem" }}
+                      />
+
                       <h5 style={{ marginBottom: "0.5rem" }}>Plantas Atribuídas</h5>
                       <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: "200px", overflowY: "auto", paddingRight: "0.5rem" }}>
                         {plans.map(plan => {
