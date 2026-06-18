@@ -274,7 +274,9 @@ export default function DashboardPage() {
             <EmergencyControl />
             <HelpCircle size={24} color="var(--color-text-secondary)" style={{ cursor: "pointer", display: "none" }} className="hidden-mobile" />
             {user?.role === "superadmin" && (
-              <Settings size={24} color="var(--color-text-secondary)" style={{ cursor: "pointer" }} onClick={() => setShowSettings(true)} title="Configurações Globais" />
+              <div title="Configurações Globais" style={{ display: "flex", alignItems: "center" }}>
+                <Settings size={24} color="var(--color-text-secondary)" style={{ cursor: "pointer" }} onClick={() => setShowSettings(true)} />
+              </div>
             )}
             
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginLeft: "0.5rem", cursor: "pointer" }} onClick={() => setShowProfile(true)} title="Definições da Conta">
