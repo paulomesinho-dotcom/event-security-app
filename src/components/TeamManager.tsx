@@ -56,7 +56,7 @@ export default function TeamManager() {
         const u = { id: d.id, ...d.data() } as User;
         todosVigias.push(u);
         if (!u.workplaceId && !u.teamId) livres.push(u);
-        if (u.workplaceId === activeWorkplace.id || (u.teamId === activeWorkplace.captainId && !u.workplaceId)) meus.push(u); // fallback for legacy data
+        if (u.workplaceId === activeWorkplace.id) meus.push(u);
       });
       setVigiasLivre(livres);
       setMinhaEquipa(meus);

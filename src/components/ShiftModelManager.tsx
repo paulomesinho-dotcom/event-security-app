@@ -45,8 +45,7 @@ export default function ShiftModelManager() {
     const q = query(collection(db, "shift_models"), where("captainId", "==", activeWorkplace?.captainId || user.uid));
     const unsub = onSnapshot(q, (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-      // Show models that belong to this workplace OR legacy models that have no workplaceId
-      const filtered = data.filter(m => m.workplaceId === activeWorkplaceId || !m.workplaceId);
+      const filtered = data.filter(m => m.workplaceId === activeWorkplaceId);
       setModels(filtered);
       setLoading(false);
     });

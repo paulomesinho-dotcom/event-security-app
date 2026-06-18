@@ -44,14 +44,14 @@ export default function LocationManager() {
     const qLoc = query(collection(db, "abstract_locations"), where("captainId", "==", captainId));
     const unsubLoc = onSnapshot(qLoc, (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-      setLocations(data.filter(l => l.workplaceId === activeWorkplaceId || !l.workplaceId));
+      setLocations(data.filter(l => l.workplaceId === activeWorkplaceId));
     });
 
     // Fetch Shift Models (legacy + current workplace)
     const qMod = query(collection(db, "shift_models"), where("captainId", "==", captainId));
     const unsubMod = onSnapshot(qMod, (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-      setModels(data.filter(m => m.workplaceId === activeWorkplaceId || !m.workplaceId));
+      setModels(data.filter(m => m.workplaceId === activeWorkplaceId));
       setLoading(false);
     });
 
