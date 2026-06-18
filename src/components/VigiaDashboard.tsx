@@ -405,6 +405,23 @@ export default function VigiaDashboard() {
 
       {showMapForShift && shiftPlanUrl && shiftLocator && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.9)", zIndex: 200, display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.85rem 1rem", background: "#151F31", color: "white", flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", minWidth: 0 }}>
+              <div style={{ background: "rgba(255,255,255,0.1)", padding: "0.45rem", borderRadius: "var(--radius-md)", flexShrink: 0 }}>
+                <MapPin size={18} color="#a5b4fc" />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ margin: 0, fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", fontWeight: 600 }}>A SUA POSIÇÃO</p>
+                <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{shiftLocator.name}</h3>
+              </div>
+            </div>
+            <button onClick={() => setShowMapForShift(null)} style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 0.75rem", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "var(--radius-md)", color: "white", cursor: "pointer", fontWeight: 600, fontSize: "0.8rem", flexShrink: 0 }}>
+              <X size={15} /> Fechar
+            </button>
+          </div>
+
+          {showMapForShift.time && (
+            <div style={{ padding: "0.5rem 1rem", background: "rgba(21,31,49,0.85)", color: "rgba(255,255,255,0.6)", fontSize: "0.78rem", display: "flex", gap: "1.25rem", flexShrink: 0, flexWrap: "wrap" }}>
               {showMapForShift.name && <span>📋 {showMapForShift.name}</span>}
               <span>🕐 {showMapForShift.time}</span>
               {showMapForShift.days && <span>📅 {showMapForShift.days}</span>}
