@@ -42,9 +42,9 @@ export default function CaptainSummaryTable() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: selectedPersonId,
+          vigiaId: selectedPersonId,
           title: "Mensagem do Capitão",
-          body: notifMessage
+          message: notifMessage
         })
       });
       if (!response.ok) throw new Error("Falha ao enviar");

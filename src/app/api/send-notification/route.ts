@@ -40,14 +40,14 @@ export async function POST(req: NextRequest) {
         clickAction: "/dashboard",
       },
       webpush: {
-        headers: { Urgency: "high" },
         notification: {
+          title: title || "Porto 2026 Security",
+          body: message,
           icon: "/icons/icon-192.png",
-          badge: "/icons/icon-192.png",
-          requireInteraction: true,
-          tag: "porto2026-captain-msg",
-          renotify: true,
         },
+        fcmOptions: {
+          link: "/dashboard"
+        }
       },
     });
 
