@@ -1,0 +1,503 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { db } from "@/lib/firebase";
+import { doc, getDoc, collection, addDoc, query, where, onSnapshot, getDocs, updateDoc } from "firebase/firestore";
+import { useAuth } from "@/contexts/AuthContext";
+import dynamic from "next/dynamic";
+const MapViewer = dynamic(() => import("@/components/MapViewer"), { ssr: false });
+import { ArrowLeft, Bell } from "lucide-react";
+import { AbstractLocation } from "@/components/LocationManager";
+import { ShiftModel } from "@/components/ShiftModelManager";
+
+interface Locator {
+  id: string;
+  x: number;
+  y: number;
+  name: string;
+  locationId?: string;
+}
+
+interface User {
+  id: string;
+  name: string;
+  role: string;
+  teamId?: string;
+}
+
+export default function PlanDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const { user } = useAuth();
+  
+  const planId = params.id as string;
+  
+  const [plan, setPlan] = useState<{ name: string; imageUrl: string } | null>(null);
+  const [locators, setLocators] = useState<Locator[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Captain Data
+  const [locations, setLocations] = useState<AbstractLocation[]>([]);
+  const [shiftModels, setShiftModels] = useState<ShiftModel[]>([]);
+  const [availableVigias, setAvailableVigias] = useState<User[]>([]);
+  const [allAssignments, setAllAssignments] = useState<any[]>([]);
+
+  // Modal add locator
+  const [showLocModal, setShowLocModal] = useState(false);
+  const [newLocCoords, setNewLocCoords] = useState<{x: number, y: number} | null>(null);
+  const [newLocName, setNewLocName] = useState("");
+  const [newLocColor, setNewLocColor] = useState("#ef4444"); // default red
+  const [selectedLocationId, setSelectedLocationId] = useState("");
+
+  // Modal assign shift
+  const [showShiftModal, setShowShiftModal] = useState(false);
+  const [selectedLocator, setSelectedLocator] = useState<Locator | null>(null);
+  const [selectedVigia, setSelectedVigia] = useState("");
+  const [selectedPeriod, setSelectedPeriod] = useState<"morning" | "afternoon" | "both">("morning");
+  const [currentAssignment, setCurrentAssignment] = useState<any>(null);
+  const [isEditMode, setIsEditMode] = useState(true);
+
+  // Toggle Mode for adding pins
+  const [isAddPinMode, setIsAddPinMode] = useState(false);
+
+  // Custom notification modal
+  const [showNotifModal, setShowNotifModal] = useState(false);
+  const [notifMessage, setNotifMessage] = useState("");
+
+  useEffect(() => {
+    const fetchPlan = async () => {
+      const docRef = doc(db, "plans", planId);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        setPlan(docSnap.data() as any);
+      } else {
+        router.push("/dashboard");
+      }
+    };
+    fetchPlan();
+
+    const unsubLocators = onSnapshot(query(collection(db, "locators"), where("planId", "==", planId)), (snapshot) => {
+      setLocators(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Locator)));
+      setLoading(false);
+    });
+
+    return () => unsubLocators();
+  }, [planId, router]);
+
+  useEffect(() => {
+    if (user?.role !== "captain") return;
+
+    // Fetch Locations
+    const unsubLocs = onSnapshot(query(collection(db, "abstract_locations"), where("captainId", "==", user.uid)), snap => {
+       setLocations(snap.docs.map(d => ({ id: d.id, ...d.data() } as AbstractLocation)));
+    });
+
+    // Fetch Shift Models
+    const unsubModels = onSnapshot(query(collection(db, "shift_models"), where("captainId", "==", user.uid)), snap => {
+       setShiftModels(snap.docs.map(d => ({ id: d.id, ...d.data() } as ShiftModel)));
+    });
+
+    // Fetch Vigias (Team + Loans)
+    const fetchVigias = async () => {
+      const allVigias: User[] = [];
+      const teamSnap = await getDocs(query(collection(db, "users"), where("teamId", "==", user.uid)));
+      teamSnap.forEach(d => allVigias.push({ id: d.id, ...d.data() } as User));
+
+      const loanSnap = await getDocs(query(collection(db, "loans"), where("toCaptainId", "==", user.uid), where("status", "==", "active")));
+      for (const ld of loanSnap.docs) {
+         const vigiaSnap = await getDoc(doc(db, "users", ld.data().vigiaId));
+         if (vigiaSnap.exists()) {
+            allVigias.push({ id: vigiaSnap.id, ...vigiaSnap.data() } as User);
+         }
+      }
+      setAvailableVigias(allVigias);
+    };
+    fetchVigias();
+
+    // Fetch All Assignments for conflict checking
+    const unsubAssignments = onSnapshot(query(collection(db, "assignments"), where("captainId", "==", user.uid)), snap => {
+       setAllAssignments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    return () => { unsubLocs(); unsubModels(); unsubAssignments(); };
+  }, [user]);
+
+  const handleAddLocatorClick = (x: number, y: number) => {
+    if (user?.role !== "captain") return;
+    setNewLocCoords({ x, y });
+    setIsAddPinMode(false); // Turn off pin mode once clicked to prevent accidental clicks after
+    setShowLocModal(true);
+  };
+
+  const saveLocator = async () => {
+    if (!newLocCoords || !newLocName || !selectedLocationId) return;
+    await addDoc(collection(db, "locators"), {
+      planId,
+      x: newLocCoords.x,
+      y: newLocCoords.y,
+      name: newLocName,
+      color: newLocColor,
+      locationId: selectedLocationId,
+      captainId: user?.uid
+    });
+    setShowLocModal(false);
+    setNewLocName(""); setNewLocColor("#ef4444"); setSelectedLocationId(""); setNewLocCoords(null);
+  };
+
+  const handleLocatorClick = async (loc: Locator) => {
+    if (user?.role !== "captain") return;
+    setSelectedLocator(loc);
+
+    // Fetch existing assignment if any
+    const qAssignment = query(collection(db, "assignments"), where("locatorId", "==", loc.id));
+    const snap = await getDocs(qAssignment);
+    if (!snap.empty) {
+       const assig = snap.docs[0].data();
+       setCurrentAssignment({ id: snap.docs[0].id, ...assig });
+       setSelectedVigia(assig.vigiaId || "");
+       setSelectedPeriod(assig.period || "morning");
+       setIsEditMode(false);
+    } else {
+       setCurrentAssignment(null);
+       setSelectedVigia("");
+       setSelectedPeriod("morning");
+       setIsEditMode(true);
+    }
+
+    setShowShiftModal(true);
+  };
+
+  const assignShift = async () => {
+    if (!selectedLocator || !selectedVigia) return;
+
+    // Get shift info to copy to assignments
+    const locationInfo = locations.find(l => l.id === selectedLocator.locationId);
+    const modelInfo = shiftModels.find(m => m.id === locationInfo?.shiftModelId) as any;
+    const modelDates = modelInfo?.dates ? modelInfo.dates.join(", ") : (modelInfo?.days || "");
+
+    // Check for conflicts (if not editing current)
+    const qConflicts = query(collection(db, "assignments"), 
+      where("vigiaId", "==", selectedVigia), 
+      where("dates", "==", modelDates)
+    );
+    const conflictsSnap = await getDocs(qConflicts);
+    let hasConflict = false;
+    
+    conflictsSnap.forEach(d => {
+       if (currentAssignment && d.id === currentAssignment.id) return; // ignore self
+       const a = d.data();
+       // Conflict if periods overlap
+       if (a.period === "both" || selectedPeriod === "both" || a.period === selectedPeriod) {
+          hasConflict = true;
+       }
+    });
+
+    if (hasConflict) {
+       alert("Erro: O vigia selecionado já tem um turno atribuído neste período/datas!");
+       return;
+    }
+
+    // Get shift info to copy to assignments and the old shifts collection for VigiaDashboard compatibility
+
+    // Save modern assignment
+    const assignmentData = {
+       vigiaId: selectedVigia,
+       locationId: selectedLocator.locationId,
+       locatorId: selectedLocator.id,
+       dates: modelDates,
+       period: selectedPeriod,
+       captainId: user?.uid
+    };
+
+    let assignmentRefId = "";
+    if (currentAssignment) {
+       await updateDoc(doc(db, "assignments", currentAssignment.id), assignmentData);
+       assignmentRefId = currentAssignment.id;
+    } else {
+       const ref = await addDoc(collection(db, "assignments"), assignmentData);
+       assignmentRefId = ref.id;
+    }
+
+    // Save legacy Shift object for compatibility with current VigiaDashboard
+    let shiftTimeStr = "";
+    if (selectedPeriod === "morning") shiftTimeStr = modelInfo?.morningTime || "Manhã";
+    if (selectedPeriod === "afternoon") shiftTimeStr = modelInfo?.afternoonTime || "Tarde";
+    if (selectedPeriod === "both") shiftTimeStr = `${modelInfo?.morningTime} e ${modelInfo?.afternoonTime}`;
+
+    await addDoc(collection(db, "shifts"), {
+       assignmentId: assignmentRefId,
+       locatorId: selectedLocator.id,
+       locatorName: selectedLocator.name,
+       planId,
+       personId: selectedVigia,
+       captainId: user?.uid,
+       name: `${locationInfo?.local} - ${selectedPeriod}`,
+       time: shiftTimeStr,
+       days: modelDates,
+       status: "pending",
+       startTime: new Date().toISOString(),
+    });
+
+    setShowShiftModal(false);
+    setSelectedLocator(null);
+    setSelectedVigia("");
+    setCurrentAssignment(null);
+    alert("Escala gravada com sucesso!");
+  };
+
+  const sendNotification = async () => {
+    if (!selectedVigia || !notifMessage.trim()) return;
+
+    // 1. Save to Firestore (for in-app notification when app is open)
+    await addDoc(collection(db, "notifications"), {
+      vigiaId: selectedVigia,
+      message: notifMessage.trim(),
+      read: false,
+      createdAt: new Date().toISOString()
+    });
+
+    // 2. Send FCM push notification (works when app is closed/background)
+    try {
+      const res = await fetch("/api/send-notification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vigiaId: selectedVigia,
+          message: notifMessage.trim(),
+          title: "Porto 2026 Security"
+        })
+      });
+      const data = await res.json();
+      if (data.code === "NO_FCM_TOKEN") {
+        console.info("Vigia ainda não activou notificações push — notificação in-app enviada.");
+      }
+    } catch (e) {
+      console.warn("FCM push falhou (funciona apenas com HTTPS):", e);
+    }
+
+    setNotifMessage("");
+    setShowNotifModal(false);
+    alert("Notificação enviada com sucesso!");
+  };
+
+
+  if (loading || !plan) return <div style={{ padding: "2rem" }}>A carregar a planta...</div>;
+
+  return (
+    <div style={{ padding: "2rem", maxWidth: "1200px", margin: "0 auto" }}>
+      <button onClick={() => router.push("/dashboard")} className="btn" style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--color-text-secondary)" }}>
+        <ArrowLeft size={16} /> Voltar ao Painel
+      </button>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+        <div>
+          <h2 style={{ margin: 0, marginBottom: "0.25rem" }}>{plan.name}</h2>
+          {user?.role === "captain" && (
+            <span style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>
+              Clique num pino existente para atribuir Vigias à escala.
+            </span>
+          )}
+        </div>
+        {user?.role === "captain" && (
+          <button 
+             className={`btn ${isAddPinMode ? 'btn-danger' : 'btn-primary'}`}
+             onClick={() => setIsAddPinMode(!isAddPinMode)}
+             style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+          >
+             {isAddPinMode ? "Cancelar Inserção" : "Adicionar Pino ao Mapa"}
+          </button>
+        )}
+      </div>
+
+      <MapViewer 
+         imageUrl={plan.imageUrl} 
+         locators={locators} 
+         onAddLocator={isAddPinMode ? handleAddLocatorClick : undefined} 
+         onLocatorClick={handleLocatorClick} 
+         isAddPinMode={isAddPinMode}
+      />
+
+      {/* Modal for new Locator */}
+      {showLocModal && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          <div className="glass" style={{ background: "var(--color-surface)", padding: "2rem", borderRadius: "var(--radius-lg)", width: "100%", maxWidth: "400px" }}>
+            <h3>Nova Posição de Segurança</h3>
+            <div style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              <div>
+                <label style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>Nome da Posição do Pino no Mapa</label>
+                <input type="text" className="input" value={newLocName} onChange={(e) => setNewLocName(e.target.value)} placeholder="Ex: Pino Principal Sul" autoFocus />
+              </div>
+              <div>
+                <label style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>Cor do Pino</label>
+                <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+                   {["#ef4444", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6"].map(c => (
+                     <div 
+                        key={c}
+                        onClick={() => setNewLocColor(c)}
+                        style={{ 
+                          width: "24px", height: "24px", borderRadius: "50%", background: c, cursor: "pointer",
+                          border: newLocColor === c ? "3px solid var(--color-primary)" : "2px solid transparent",
+                          outline: newLocColor === c ? "2px solid white" : "none"
+                        }}
+                     />
+                   ))}
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>Ligar a um Local Abstrato</label>
+                <select className="input" value={selectedLocationId} onChange={e => setSelectedLocationId(e.target.value)}>
+                   <option value="">Selecione o Local criado...</option>
+                   {locations.map(l => (
+                     <option key={l.id} value={l.id}>
+                        {l.local} {l.sublocal ? `- ${l.sublocal}` : ''} {l.subsublocal ? `- ${l.subsublocal}` : ''}
+                     </option>
+                   ))}
+                </select>
+                <p style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)", marginTop: "0.25rem" }}>O Modelo de Turno associado a este Local será utilizado nas atribuições.</p>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem" }}>
+              <button className="btn btn-secondary" onClick={() => setShowLocModal(false)} style={{ flex: 1 }}>Cancelar</button>
+              <button className="btn btn-primary" onClick={saveLocator} disabled={!newLocName || !selectedLocationId} style={{ flex: 1 }}>Criar Pino</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Assign Shift */}
+      {showShiftModal && selectedLocator && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          <div className="glass" style={{ background: "var(--color-surface)", padding: "2rem", borderRadius: "var(--radius-lg)", width: "100%", maxWidth: "450px" }}>
+            <h3>Atribuir Vigia à Escala</h3>
+            
+            <div style={{ marginTop: "1rem", padding: "1rem", background: "var(--color-bg)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)" }}>
+              <p style={{ margin: 0, fontWeight: "bold" }}>Pino: {selectedLocator.name}</p>
+              {(() => {
+                const loc = locations.find(l => l.id === selectedLocator.locationId);
+                const mod = shiftModels.find(m => m.id === loc?.shiftModelId);
+                return (
+                  <div style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)", marginTop: "0.5rem" }}>
+                     <div><strong>Local:</strong> {loc?.local} {loc?.sublocal} {loc?.subsublocal}</div>
+                     <div><strong>Modelo Turno:</strong> {mod?.name}</div>
+                  </div>
+                );
+              })()}
+            </div>
+            
+            <div style={{ marginTop: "1.5rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+              {isEditMode ? (
+                <>
+                  {(() => {
+                     const loc = locations.find(l => l.id === selectedLocator.locationId);
+                     const mod = shiftModels.find(m => m.id === loc?.shiftModelId) as any;
+                     const modelDatesStr = mod?.dates ? mod.dates.join(", ") : (mod?.days || "");
+                     const modelDatesArr = modelDatesStr.split(",").map((s: string) => s.trim()).filter((s: string) => s);
+
+                     const busyVigias = allAssignments.filter(a => {
+                        if (currentAssignment && a.id === currentAssignment.id) return false;
+                        if (a.period !== "both" && selectedPeriod !== "both" && a.period !== selectedPeriod) return false;
+                        const aDatesArr = (a.dates || "").split(",").map((s: string) => s.trim()).filter((s: string) => s);
+                        return aDatesArr.some((d: string) => modelDatesArr.includes(d));
+                     }).map(a => a.vigiaId);
+
+                     const filteredVigias = availableVigias.filter(v => !busyVigias.includes(v.id));
+
+                     return (
+                        <div>
+                          <label style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>Vigia</label>
+                          <select className="input" value={selectedVigia} onChange={(e) => setSelectedVigia(e.target.value)}>
+                            <option value="">-- Selecione o Vigia --</option>
+                            {filteredVigias.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                          </select>
+                          {busyVigias.length > 0 && <p style={{ fontSize: "0.75rem", color: "var(--color-danger)", marginTop: "0.25rem" }}>{busyVigias.length} vigia(s) oculto(s) por indisponibilidade neste turno.</p>}
+                        </div>
+                     );
+                  })()}
+
+                  <div>
+                    <label style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>Período a Cumprir</label>
+                    <select className="input" value={selectedPeriod} onChange={(e: any) => setSelectedPeriod(e.target.value)}>
+                      <option value="morning">Manhã</option>
+                      <option value="afternoon">Tarde</option>
+                      <option value="both">Ambos (Manhã e Tarde)</option>
+                    </select>
+                  </div>
+                </>
+              ) : (
+                <div style={{ padding: "1rem", border: "1px dashed var(--color-border)", borderRadius: "var(--radius-md)", background: "rgba(255,255,255,0.02)" }}>
+                  <p style={{ margin: "0 0 0.5rem 0" }}>
+                     <strong>Vigia Atribuído:</strong> {availableVigias.find(v => v.id === selectedVigia)?.name || "Desconhecido"}
+                  </p>
+                  <p style={{ margin: 0 }}>
+                     <strong>Período:</strong> {selectedPeriod === 'both' ? 'Manhã e Tarde' : selectedPeriod === 'morning' ? 'Manhã' : 'Tarde'}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem", flexDirection: "column" }}>
+              {isEditMode ? (
+                 <button className="btn btn-primary" onClick={assignShift} disabled={!selectedVigia}>Gravar Escala</button>
+              ) : (
+                 <button className="btn btn-primary" onClick={() => setIsEditMode(true)}>Editar Atribuição</button>
+              )}
+              
+              {!isEditMode && selectedVigia && (
+                <button className="btn btn-secondary" onClick={() => { setNotifMessage(""); setShowNotifModal(true); }} style={{ border: "1px solid var(--color-danger)", color: "var(--color-danger)" }}>
+                  <Bell size={16} style={{ display: "inline", marginRight: "0.5rem" }}/>
+                  Notificar Vigia
+                </button>
+              )}
+              <button className="btn" onClick={() => setShowShiftModal(false)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Notification Modal */}
+      {showNotifModal && selectedVigia && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.6)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          <div style={{ background: "var(--color-surface)", padding: "2rem", borderRadius: "var(--radius-lg)", width: "100%", maxWidth: "460px", boxShadow: "var(--shadow-lg)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+              <div style={{ background: "rgba(239,68,68,0.1)", padding: "0.75rem", borderRadius: "50%" }}>
+                <Bell size={20} color="var(--color-danger)" />
+              </div>
+              <div>
+                <h3 style={{ margin: 0 }}>Enviar Notificação</h3>
+                <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>
+                  Para: <strong>{availableVigias.find(v => v.id === selectedVigia)?.name || "Vigia"}</strong>
+                </p>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)", display: "block", marginBottom: "0.5rem" }}>Mensagem Personalizada</label>
+              <textarea
+                className="input"
+                rows={4}
+                placeholder="Ex: Por favor dirija-se ao posto de controlo principal com urgência."
+                value={notifMessage}
+                onChange={e => setNotifMessage(e.target.value)}
+                style={{ resize: "vertical", lineHeight: 1.6 }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" }}>
+              {["Dirija-se ao posto de controlo.", "Contacte o Capitão de Zona com urgência.", "Há uma ocorrência na sua área. Atenção redobrada."].map(preset => (
+                <button key={preset} onClick={() => setNotifMessage(preset)} style={{ fontSize: "0.75rem", padding: "0.35rem 0.75rem", borderRadius: "999px", border: "1px solid var(--color-border)", background: notifMessage === preset ? "var(--color-primary-light)" : "var(--color-bg)", color: notifMessage === preset ? "var(--color-primary)" : "var(--color-text-secondary)", cursor: "pointer" }}>
+                  {preset}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", gap: "0.75rem" }}>
+              <button className="btn" onClick={() => setShowNotifModal(false)} style={{ flex: 1 }}>Cancelar</button>
+              <button className="btn btn-danger" onClick={sendNotification} disabled={!notifMessage.trim()} style={{ flex: 1 }}>Enviar Notificação</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
