@@ -19,8 +19,8 @@ interface User {
 interface Loan {
   id: string;
   vigiaId: string;
-  fromCaptainId: string;
-  toCaptainId: string;
+  fromWorkplaceId: string;
+  toWorkplaceId: string;
   status: "active" | "returned";
 }
 
@@ -30,13 +30,13 @@ export default function TeamManager() {
   const [vigiasLivre, setVigiasLivre] = useState<User[]>([]);
   const [minhaEquipa, setMinhaEquipa] = useState<User[]>([]);
   const [vigiasCedidos, setVigiasCedidos] = useState<{loan: Loan, vigia: User}[]>([]);
-  const [outrosCapitaes, setOutrosCapitaes] = useState<User[]>([]);
+  const [outrosWorkplaces, setOutrosWorkplaces] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Loan State
   const [showLoanModal, setShowLoanModal] = useState(false);
   const [loanVigiaId, setLoanVigiaId] = useState("");
-  const [loanToCaptainId, setLoanToCaptainId] = useState("");
+  const [loanToWorkplaceId, setLoanToWorkplaceId] = useState("");
 
   useEffect(() => {
     if (!user || !activeWorkplace) {
@@ -62,7 +62,7 @@ export default function TeamManager() {
       setMinhaEquipa(meus);
       
       // Also fetch loans where we are the receiver
-      const unsubLoans = onSnapshot(query(collection(db, "loans"), where("toCaptainId", "==", user.uid), where("status", "==", "active")), (loanSnap) => {
+      const unsubLoans = onSnapshot(query(collection(db, "loans"), where("toWorkplaceId", "==", activeWorkplace.id), where("status", "==", "active")), (loanSnap) => {
          const cedidosData: {loan: Loan, vigia: User}[] = [];
          loanSnap.forEach(ld => {
             const loan = { id: ld.id, ...ld.data() } as Loan;
@@ -77,19 +77,19 @@ export default function TeamManager() {
       return () => unsubLoans();
     });
 
-    // Fetch other captains
-    const unsubCaps = onSnapshot(query(collection(db, "users"), where("role", "==", "captain")), (snap) => {
-       const caps: User[] = [];
+    // Fetch other workplaces
+    const unsubWps = onSnapshot(query(collection(db, "workplaces")), (snap) => {
+       const wps: any[] = [];
        snap.forEach(d => {
-         if (d.id !== user.uid) caps.push({ id: d.id, ...d.data() } as User);
+         if (d.id !== activeWorkplace.id) wps.push({ id: d.id, ...d.data() });
        });
-       setOutrosCapitaes(caps);
+       setOutrosWorkplaces(wps);
        setLoading(false);
     });
 
     return () => {
       unsubUsers();
-      unsubCaps();
+      unsubWps();
     };
   }, [user, activeWorkplace]);
 
@@ -105,17 +105,17 @@ export default function TeamManager() {
   };
 
   const processLoan = async () => {
-    if (!loanVigiaId || !loanToCaptainId) return;
+    if (!loanVigiaId || !loanToWorkplaceId || !activeWorkplace) return;
     await addDoc(collection(db, "loans"), {
        vigiaId: loanVigiaId,
-       fromCaptainId: user?.uid,
-       toCaptainId: loanToCaptainId,
+       fromWorkplaceId: activeWorkplace.id,
+       toWorkplaceId: loanToWorkplaceId,
        status: "active",
        createdAt: new Date().toISOString()
     });
     setShowLoanModal(false);
     setLoanVigiaId("");
-    setLoanToCaptainId("");
+    setLoanToWorkplaceId("");
     alert("Vigia cedido com sucesso.");
   };
 
@@ -139,7 +139,7 @@ export default function TeamManager() {
                       {v.congregation && <span style={{ display: "block", fontSize: "0.75rem", color: "var(--color-text-secondary)" }}>{v.congregation}</span>}
                     </div>
                     <div style={{ display: "flex", gap: "0.25rem" }}>
-                      <button onClick={() => { setLoanVigiaId(v.id); setShowLoanModal(true); }} className="btn btn-secondary" style={{ padding: "0.25rem", fontSize: "0.75rem" }} title="Ceder a outro capitão">
+                      <button onClick={() => { setLoanVigiaId(v.id); setShowLoanModal(true); }} className="btn btn-secondary" style={{ padding: "0.25rem", fontSize: "0.75rem" }} title="Ceder a outro Workplace">
                         <ArrowRightLeft size={14} />
                       </button>
                       <button onClick={() => removeFromTeam(v.id)} className="btn btn-danger" style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}>Remover</button>
@@ -197,15 +197,15 @@ export default function TeamManager() {
             <div className="glass" style={{ background: "var(--color-surface)", padding: "2rem", borderRadius: "var(--radius-lg)", width: "100%", maxWidth: "400px" }}>
                <h3>Ceder Vigia</h3>
                <p style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)", marginBottom: "1rem" }}>
-                 O Vigia selecionado poderá ser integrado nas escalas do capitão de destino.
+                 O Vigia selecionado poderá ser integrado nas escalas do Workplace de destino.
                </p>
-               <select className="input" value={loanToCaptainId} onChange={e => setLoanToCaptainId(e.target.value)}>
-                  <option value="">Selecione o Capitão Destino</option>
-                  {outrosCapitaes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+               <select className="input" value={loanToWorkplaceId} onChange={e => setLoanToWorkplaceId(e.target.value)}>
+                  <option value="">Selecione o Workplace Destino</option>
+                  {outrosWorkplaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                </select>
                <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem" }}>
                   <button className="btn btn-secondary" onClick={() => setShowLoanModal(false)} style={{ flex: 1 }}>Cancelar</button>
-                  <button className="btn btn-primary" onClick={processLoan} disabled={!loanToCaptainId} style={{ flex: 1 }}>Confirmar Cedência</button>
+                  <button className="btn btn-primary" onClick={processLoan} disabled={!loanToWorkplaceId} style={{ flex: 1 }}>Confirmar Cedência</button>
                </div>
             </div>
          </div>
