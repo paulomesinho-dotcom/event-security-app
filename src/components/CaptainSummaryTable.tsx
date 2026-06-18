@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
-import { MapPin, Clock, CheckCircle2, PlayCircle, ShieldCheck } from "lucide-react";
+import { MapPin, Clock, CheckCircle2, PlayCircle, ShieldCheck, Bell, X } from "lucide-react";
 
 interface Shift {
   id: string;
@@ -26,6 +26,38 @@ export default function CaptainSummaryTable() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [users, setUsers] = useState<UserMap>({});
   const [loading, setLoading] = useState(true);
+
+  // Notification Modal State
+  const [showNotifModal, setShowNotifModal] = useState(false);
+  const [notifMessage, setNotifMessage] = useState("");
+  const [selectedPersonId, setSelectedPersonId] = useState("");
+  const [sendingNotif, setSendingNotif] = useState(false);
+
+  const handleSendNotification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPersonId || !notifMessage.trim()) return;
+    setSendingNotif(true);
+    try {
+      const response = await fetch("/api/send-notification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: selectedPersonId,
+          title: "Mensagem do Capitão",
+          body: notifMessage
+        })
+      });
+      if (!response.ok) throw new Error("Falha ao enviar");
+      alert("Notificação enviada com sucesso!");
+      setShowNotifModal(false);
+      setNotifMessage("");
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao enviar notificação.");
+    } finally {
+      setSendingNotif(false);
+    }
+  };
 
   useEffect(() => {
     if (!user || user.role !== "captain") return;
@@ -120,6 +152,7 @@ export default function CaptainSummaryTable() {
                 <th style={{ padding: "1rem 1.5rem", color: "var(--color-text-secondary)", fontWeight: 600 }}>Turno</th>
                 <th style={{ padding: "1rem 1.5rem", color: "var(--color-text-secondary)", fontWeight: 600 }}>Vigia Destacado</th>
                 <th style={{ padding: "1rem 1.5rem", color: "var(--color-text-secondary)", fontWeight: 600, textAlign: "right" }}>Estado Atual</th>
+                <th style={{ padding: "1rem 1.5rem", color: "var(--color-text-secondary)", fontWeight: 600, textAlign: "right" }}>Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -168,11 +201,77 @@ export default function CaptainSummaryTable() {
                         {shift.status === "pending" ? "Pendente" : shift.status === "active" ? "Em Curso" : "Terminado"}
                       </span>
                     </td>
+
+                    {/* Ações */}
+                    <td style={{ padding: "1rem 1.5rem", textAlign: "right" }}>
+                      <button 
+                         onClick={() => {
+                           setSelectedPersonId(shift.personId);
+                           setNotifMessage("");
+                           setShowNotifModal(true);
+                         }}
+                         className="btn btn-secondary"
+                         style={{ padding: "0.4rem 0.8rem", display: "inline-flex", gap: "0.4rem", color: "var(--color-primary)", borderColor: "var(--color-border)" }}
+                         title={`Notificar ${vigiaName}`}
+                      >
+                         <Bell size={14} /> <span style={{ fontSize: "0.75rem" }}>Notificar</span>
+                      </button>
+                    </td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Modal de Notificação */}
+      {showNotifModal && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem", backdropFilter: "blur(4px)" }}>
+          <div className="glass animate-fade-in" style={{ background: "var(--color-surface)", padding: "2rem", borderRadius: "var(--radius-lg)", width: "100%", maxWidth: "400px", position: "relative" }}>
+            
+            <button 
+               onClick={() => setShowNotifModal(false)}
+               style={{ position: "absolute", top: "1.5rem", right: "1.5rem", background: "transparent", border: "none", cursor: "pointer", color: "var(--color-text-secondary)" }}
+            >
+               <X size={20} />
+            </button>
+
+            <h3 style={{ marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: "0.5rem", marginTop: 0 }}>
+              <Bell size={20} color="var(--color-primary)" />
+              Enviar Notificação
+            </h3>
+            
+            <p style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)", marginBottom: "1rem" }}>
+              Escreva a mensagem que deseja enviar para o dispositivo do Vigia <strong>{users[selectedPersonId]}</strong>.
+            </p>
+
+            <form onSubmit={handleSendNotification} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem", color: "var(--color-text-secondary)", fontWeight: 500 }}>
+                  Mensagem
+                </label>
+                <textarea
+                  className="input"
+                  value={notifMessage}
+                  onChange={(e) => setNotifMessage(e.target.value)}
+                  required
+                  rows={3}
+                  placeholder="Ex: Preciso de apoio no portão sul..."
+                  style={{ resize: "none" }}
+                />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.5rem", gap: "0.75rem" }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowNotifModal(false)} disabled={sendingNotif}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={sendingNotif || !notifMessage.trim()}>
+                  {sendingNotif ? "A enviar..." : "Enviar Push"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

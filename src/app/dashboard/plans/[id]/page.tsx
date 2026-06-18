@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, collection, addDoc, query, where, onSnapshot, getDocs, updateDoc } from "firebase/firestore";
+import { doc, getDoc, collection, addDoc, query, where, onSnapshot, getDocs, updateDoc, deleteDoc } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
 import dynamic from "next/dynamic";
 const MapViewer = dynamic(() => import("@/components/MapViewer"), { ssr: false });
@@ -55,8 +55,7 @@ export default function PlanDetailPage() {
   const [selectedLocator, setSelectedLocator] = useState<Locator | null>(null);
   const [selectedVigia, setSelectedVigia] = useState("");
   const [selectedPeriod, setSelectedPeriod] = useState<"morning" | "afternoon" | "both">("morning");
-  const [currentAssignment, setCurrentAssignment] = useState<any>(null);
-  const [isEditMode, setIsEditMode] = useState(true);
+  const [currentAssignments, setCurrentAssignments] = useState<any[]>([]);
 
   // Toggle Mode for adding pins
   const [isAddPinMode, setIsAddPinMode] = useState(false);
@@ -149,21 +148,13 @@ export default function PlanDetailPage() {
     if (user?.role !== "captain") return;
     setSelectedLocator(loc);
 
-    // Fetch existing assignment if any
+    // Fetch existing assignments
     const qAssignment = query(collection(db, "assignments"), where("locatorId", "==", loc.id));
     const snap = await getDocs(qAssignment);
-    if (!snap.empty) {
-       const assig = snap.docs[0].data();
-       setCurrentAssignment({ id: snap.docs[0].id, ...assig });
-       setSelectedVigia(assig.vigiaId || "");
-       setSelectedPeriod(assig.period || "morning");
-       setIsEditMode(false);
-    } else {
-       setCurrentAssignment(null);
-       setSelectedVigia("");
-       setSelectedPeriod("morning");
-       setIsEditMode(true);
-    }
+    const assigns = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    setCurrentAssignments(assigns);
+    setSelectedVigia("");
+    setSelectedPeriod("morning");
 
     setShowShiftModal(true);
   };
@@ -185,7 +176,6 @@ export default function PlanDetailPage() {
     let hasConflict = false;
     
     conflictsSnap.forEach(d => {
-       if (currentAssignment && d.id === currentAssignment.id) return; // ignore self
        const a = d.data();
        // Conflict if periods overlap
        if (a.period === "both" || selectedPeriod === "both" || a.period === selectedPeriod) {
@@ -210,14 +200,8 @@ export default function PlanDetailPage() {
        captainId: user?.uid
     };
 
-    let assignmentRefId = "";
-    if (currentAssignment) {
-       await updateDoc(doc(db, "assignments", currentAssignment.id), assignmentData);
-       assignmentRefId = currentAssignment.id;
-    } else {
-       const ref = await addDoc(collection(db, "assignments"), assignmentData);
-       assignmentRefId = ref.id;
-    }
+    const ref = await addDoc(collection(db, "assignments"), assignmentData);
+    const assignmentRefId = ref.id;
 
     // Save legacy Shift object for compatibility with current VigiaDashboard
     let shiftTimeStr = "";
@@ -242,8 +226,24 @@ export default function PlanDetailPage() {
     setShowShiftModal(false);
     setSelectedLocator(null);
     setSelectedVigia("");
-    setCurrentAssignment(null);
+    setCurrentAssignments([]);
     alert("Escala gravada com sucesso!");
+  };
+
+  const deleteAssignment = async (assignId: string) => {
+    if (!confirm("Tem a certeza que deseja remover este vigia desta localização?")) return;
+    try {
+      await deleteDoc(doc(db, "assignments", assignId));
+      const qShifts = query(collection(db, "shifts"), where("assignmentId", "==", assignId));
+      const snap = await getDocs(qShifts);
+      for (const d of snap.docs) {
+         await deleteDoc(doc(db, "shifts", d.id));
+      }
+      setCurrentAssignments(prev => prev.filter(a => a.id !== assignId));
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao remover a escala.");
+    }
   };
 
   const sendNotification = async () => {
@@ -369,25 +369,54 @@ export default function PlanDetailPage() {
       {showShiftModal && selectedLocator && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
           <div className="glass" style={{ background: "var(--color-surface)", padding: "2rem", borderRadius: "var(--radius-lg)", width: "100%", maxWidth: "450px" }}>
-            <h3>Atribuir Vigia à Escala</h3>
-            
-            <div style={{ marginTop: "1rem", padding: "1rem", background: "var(--color-bg)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)" }}>
-              <p style={{ margin: 0, fontWeight: "bold" }}>Pino: {selectedLocator.name}</p>
-              {(() => {
-                const loc = locations.find(l => l.id === selectedLocator.locationId);
-                const mod = shiftModels.find(m => m.id === loc?.shiftModelId);
-                return (
-                  <div style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)", marginTop: "0.5rem" }}>
-                     <div><strong>Local:</strong> {loc?.local} {loc?.sublocal} {loc?.subsublocal}</div>
-                     <div><strong>Modelo Turno:</strong> {mod?.name}</div>
-                  </div>
-                );
-              })()}
-            </div>
-            
-            <div style={{ marginTop: "1.5rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
-              {isEditMode ? (
-                <>
+            <h3 style={{ marginBottom: "1.5rem" }}>Gerir Escalas: {selectedLocator.name}</h3>
+            {/* Lista de Escalas Atuais */}
+            {currentAssignments.length > 0 && (
+              <div style={{ marginBottom: "2rem" }}>
+                <h4 style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)", marginBottom: "0.5rem" }}>Vigias Escalados:</h4>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  {currentAssignments.map(assign => {
+                    const vName = availableVigias.find(v => v.id === assign.vigiaId)?.name || "Vigia Removido";
+                    const pName = assign.period === "morning" ? "Manhã" : assign.period === "afternoon" ? "Tarde" : "Dia Inteiro";
+                    return (
+                      <div key={assign.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--color-bg)", padding: "0.75rem", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)" }}>
+                        <div>
+                          <strong>{vName}</strong>
+                          <div style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)" }}>Turno: {pName}</div>
+                        </div>
+                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                          <button 
+                            onClick={(e) => {
+                               e.preventDefault();
+                               setSelectedVigia(assign.vigiaId);
+                               setNotifMessage("");
+                               setShowNotifModal(true);
+                            }}
+                            style={{ background: "transparent", border: "none", color: "var(--color-primary)", cursor: "pointer", padding: "0.5rem" }}
+                            title="Notificar Vigia"
+                          >
+                            <Bell size={18} />
+                          </button>
+                          <button 
+                            onClick={(e) => { e.preventDefault(); deleteAssignment(assign.id); }}
+                            style={{ background: "transparent", border: "none", color: "var(--color-danger)", cursor: "pointer", padding: "0.5rem" }}
+                            title="Remover Vigia"
+                          >
+                            Apagar
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={assignShift} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <h4 style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)", marginBottom: "0", borderTop: currentAssignments.length > 0 ? "1px solid var(--color-border)" : "none", paddingTop: currentAssignments.length > 0 ? "1.5rem" : "0" }}>
+                Adicionar Novo Turno
+              </h4>
+              <>
                   {(() => {
                      const loc = locations.find(l => l.id === selectedLocator.locationId);
                      const mod = shiftModels.find(m => m.id === loc?.shiftModelId) as any;
@@ -395,7 +424,6 @@ export default function PlanDetailPage() {
                      const modelDatesArr = modelDatesStr.split(",").map((s: string) => s.trim()).filter((s: string) => s);
 
                      const busyVigias = allAssignments.filter(a => {
-                        if (currentAssignment && a.id === currentAssignment.id) return false;
                         if (a.period !== "both" && selectedPeriod !== "both" && a.period !== selectedPeriod) return false;
                         const aDatesArr = (a.dates || "").split(",").map((s: string) => s.trim()).filter((s: string) => s);
                         return aDatesArr.some((d: string) => modelDatesArr.includes(d));
@@ -424,32 +452,11 @@ export default function PlanDetailPage() {
                     </select>
                   </div>
                 </>
-              ) : (
-                <div style={{ padding: "1rem", border: "1px dashed var(--color-border)", borderRadius: "var(--radius-md)", background: "rgba(255,255,255,0.02)" }}>
-                  <p style={{ margin: "0 0 0.5rem 0" }}>
-                     <strong>Vigia Atribuído:</strong> {availableVigias.find(v => v.id === selectedVigia)?.name || "Desconhecido"}
-                  </p>
-                  <p style={{ margin: 0 }}>
-                     <strong>Período:</strong> {selectedPeriod === 'both' ? 'Manhã e Tarde' : selectedPeriod === 'morning' ? 'Manhã' : 'Tarde'}
-                  </p>
-                </div>
-              )}
-            </div>
+            </form>
 
             <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem", flexDirection: "column" }}>
-              {isEditMode ? (
-                 <button className="btn btn-primary" onClick={assignShift} disabled={!selectedVigia}>Gravar Escala</button>
-              ) : (
-                 <button className="btn btn-primary" onClick={() => setIsEditMode(true)}>Editar Atribuição</button>
-              )}
-              
-              {!isEditMode && selectedVigia && (
-                <button className="btn btn-secondary" onClick={() => { setNotifMessage(""); setShowNotifModal(true); }} style={{ border: "1px solid var(--color-danger)", color: "var(--color-danger)" }}>
-                  <Bell size={16} style={{ display: "inline", marginRight: "0.5rem" }}/>
-                  Notificar Vigia
-                </button>
-              )}
-              <button className="btn" onClick={() => setShowShiftModal(false)}>Cancelar</button>
+               <button className="btn btn-primary" onClick={assignShift} disabled={!selectedVigia}>Adicionar Turno</button>
+               <button type="button" className="btn" onClick={() => setShowShiftModal(false)}>Fechar</button>
             </div>
           </div>
         </div>
