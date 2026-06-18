@@ -23,22 +23,8 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Received background message:', payload);
 
-  const notificationTitle = payload.notification?.title || 'Porto 2026 Security';
-  const notificationOptions = {
-    body: payload.notification?.body || payload.data?.message || 'Nova mensagem do Capitão',
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
-    tag: 'porto2026-notification',
-    renotify: true,
-    requireInteraction: true,
-    actions: [
-      { action: 'open', title: 'Abrir App' },
-      { action: 'dismiss', title: 'Dispensar' }
-    ],
-    data: payload.data || {}
-  };
-
-  self.registration.showNotification(notificationTitle, notificationOptions);
+  // O Firebase SDK trata automaticamente de exibir a notificação se `payload.notification` existir.
+  // Apenas fazemos log aqui para debug.
 });
 
 // Handle notification click

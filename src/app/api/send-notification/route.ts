@@ -39,17 +39,6 @@ export async function POST(req: NextRequest) {
         message,
         clickAction: "/dashboard",
       },
-      android: {
-        priority: "high",
-        notification: {
-          channelId: "porto2026-security",
-          priority: "max",
-          sound: "default",
-          vibrateTimingsMillis: [0, 250, 250, 250],
-          icon: "notification_icon",
-          color: "#151F31",
-        },
-      },
       webpush: {
         headers: { Urgency: "high" },
         notification: {

@@ -261,12 +261,19 @@ export default function CaptainSummaryTable() {
                   style={{ resize: "none" }}
                 />
               </div>
+              <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" }}>
+                {["Dirija-se ao posto de controlo.", "Contacte o Capitão de Zona com urgência.", "Há uma ocorrência na sua área. Atenção redobrada."].map(preset => (
+                  <button key={preset} type="button" onClick={() => setNotifMessage(preset)} style={{ fontSize: "0.75rem", padding: "0.35rem 0.75rem", borderRadius: "999px", border: "1px solid var(--color-border)", background: notifMessage === preset ? "var(--color-primary-light)" : "var(--color-bg)", color: notifMessage === preset ? "var(--color-primary)" : "var(--color-text-secondary)", cursor: "pointer" }}>
+                    {preset}
+                  </button>
+                ))}
+              </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.5rem", gap: "0.75rem" }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowNotifModal(false)} disabled={sendingNotif}>
                   Cancelar
                 </button>
-                <button type="submit" className="btn btn-primary" disabled={sendingNotif || !notifMessage.trim()}>
+                <button type="submit" className="btn btn-danger" disabled={sendingNotif || !notifMessage.trim()}>
                   {sendingNotif ? "A enviar..." : "Enviar Push"}
                 </button>
               </div>

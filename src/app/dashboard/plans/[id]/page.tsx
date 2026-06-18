@@ -365,10 +365,10 @@ export default function PlanDetailPage() {
         </div>
       )}
 
-      {/* Modal Assign Shift */}
+      {/* Sidebar Assign Shift */}
       {showShiftModal && selectedLocator && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-          <div className="glass" style={{ background: "var(--color-surface)", padding: "2rem", borderRadius: "var(--radius-lg)", width: "100%", maxWidth: "450px" }}>
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", justifyContent: "flex-end" }}>
+          <div style={{ background: "var(--color-surface)", padding: "2rem", width: "100%", maxWidth: "450px", height: "100%", overflowY: "auto", borderLeft: "1px solid var(--color-border)", boxShadow: "-4px 0 15px rgba(0,0,0,0.1)" }}>
             <h3 style={{ marginBottom: "1.5rem" }}>Gerir Escalas: {selectedLocator.name}</h3>
             {/* Lista de Escalas Atuais */}
             {currentAssignments.length > 0 && (
