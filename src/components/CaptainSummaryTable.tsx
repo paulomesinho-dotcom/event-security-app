@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot, addDoc } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
 import { MapPin, Clock, CheckCircle2, PlayCircle, ShieldCheck, Bell, X } from "lucide-react";
 
@@ -38,13 +38,22 @@ export default function CaptainSummaryTable() {
     if (!selectedPersonId || !notifMessage.trim()) return;
     setSendingNotif(true);
     try {
+      // 1. Save to Firestore (for in-app notification when app is open)
+      await addDoc(collection(db, "notifications"), {
+        vigiaId: selectedPersonId,
+        message: notifMessage.trim(),
+        read: false,
+        createdAt: new Date().toISOString()
+      });
+
+      // 2. Send FCM push notification (works when app is closed/background)
       const response = await fetch("/api/send-notification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           vigiaId: selectedPersonId,
           title: "Mensagem do Capitão",
-          message: notifMessage
+          message: notifMessage.trim()
         })
       });
       if (!response.ok) throw new Error("Falha ao enviar");
