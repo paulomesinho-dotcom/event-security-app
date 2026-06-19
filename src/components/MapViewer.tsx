@@ -216,7 +216,7 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
   }, []);
 
   return (
-    <div style={{ position: "relative", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", overflow: "hidden", background: "#f3f4f6" }}>
+    <div style={{ position: "relative", width: "100%", height: "100%", display: "flex", flexDirection: "column", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", overflow: "hidden", background: "#f3f4f6" }}>
       
       {/* Zoom Controls */}
       <div style={{ position: "absolute", top: 10, right: 10, zIndex: 10, display: "flex", gap: "0.5rem" }}>
@@ -229,7 +229,7 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
          onWheel={handleWheel}
          style={{ 
            overflow: "hidden", 
-           maxHeight: "70vh", 
+           flex: 1, 
            width: "100%", 
            background: "#e5e7eb",
            cursor: isAddPinMode ? "crosshair" : isPanning ? "grabbing" : "grab",

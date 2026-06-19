@@ -11,6 +11,46 @@ import { requestNotificationPermission, onForegroundMessage } from "@/lib/fireba
 import dynamic from "next/dynamic";
 const MapViewer = dynamic(() => import("@/components/MapViewer"), { ssr: false });
 
+const compressImage = (file: File): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new window.Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX_WIDTH = 1000;
+        const MAX_HEIGHT = 1000;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0, width, height);
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error("Canvas to Blob failed"));
+        }, "image/jpeg", 0.7);
+      };
+      img.onerror = (e) => reject(e);
+    };
+    reader.onerror = (e) => reject(e);
+  });
+};
+
 interface Shift {
   id: string;
   locatorId: string;
@@ -139,9 +179,11 @@ export default function VigiaDashboard() {
 
   // Incident Reporting
   const [showIncidentModal, setShowIncidentModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [incidentText, setIncidentText] = useState("");
   const [incidentPhoto, setIncidentPhoto] = useState<File | null>(null);
   const [incidentUploading, setIncidentUploading] = useState(false);
+  const [myIncidents, setMyIncidents] = useState<any[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -172,7 +214,15 @@ export default function VigiaDashboard() {
       setWorkplaces(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
-    return () => { unsubShifts(); unsubNotifs(); unsubFcm(); unsubWorkplaces(); };
+    const qIncidents = query(collection(db, "incidents"), where("vigiaId", "==", user.uid));
+    const unsubIncidents = onSnapshot(qIncidents, (snap) => {
+      const inc: any[] = [];
+      snap.forEach(d => inc.push({ id: d.id, ...d.data() }));
+      inc.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setMyIncidents(inc);
+    });
+
+    return () => { unsubShifts(); unsubNotifs(); unsubFcm(); unsubWorkplaces(); unsubIncidents(); };
   }, [user]);
 
   useEffect(() => {
@@ -223,9 +273,10 @@ export default function VigiaDashboard() {
     try {
       let photoUrl = "";
       if (incidentPhoto) {
+        const compressedBlob = await compressImage(incidentPhoto);
         const storage = getStorage();
         const fileRef = ref(storage, `incidents/${user?.uid}_${Date.now()}`);
-        await uploadBytes(fileRef, incidentPhoto);
+        await uploadBytes(fileRef, compressedBlob);
         photoUrl = await getDownloadURL(fileRef);
       }
       await addDoc(collection(db, "incidents"), {
@@ -300,6 +351,13 @@ export default function VigiaDashboard() {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
+          
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+             <button onClick={() => setShowHistoryModal(true)} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", background: "var(--color-surface)", color: "var(--color-text-secondary)", padding: "0.6rem 1rem", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", fontWeight: 600, fontSize: "0.85rem", flex: 1, cursor: "pointer" }}>
+               Histórico de Ocorrências {myIncidents.length > 0 && `(${myIncidents.length})`}
+             </button>
+          </div>
+
           {activeShift && (
             <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem" }}>
               {zelloLink && (
@@ -478,10 +536,42 @@ export default function VigiaDashboard() {
             </div>
           )}
 
-          <div style={{ flex: 1, padding: "0.5rem", overflow: "hidden" }}>
-            <div style={{ borderRadius: "var(--radius-md)", overflow: "hidden", height: "100%", border: "2px solid rgba(255,255,255,0.08)" }}>
+          <div style={{ flex: 1, padding: "0.5rem", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            <div style={{ flex: 1, borderRadius: "var(--radius-md)", overflow: "hidden", border: "2px solid rgba(255,255,255,0.08)" }}>
               <MapViewer imageUrl={shiftPlanUrl} locators={[shiftLocator]} />
             </div>
+          </div>
+        </div>
+      )}
+
+      {showHistoryModal && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--color-bg)", zIndex: 9000, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1rem 1.5rem", borderBottom: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+            <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}><FileWarning size={18}/> O Meu Histórico</h3>
+            <button onClick={() => setShowHistoryModal(false)} style={{ background: "none", border: "none", color: "var(--color-text-primary)", cursor: "pointer" }}><X size={20}/></button>
+          </div>
+          <div style={{ padding: "1rem", flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
+            {myIncidents.length === 0 ? (
+               <div style={{ textAlign: "center", padding: "2rem", color: "var(--color-text-secondary)" }}>Ainda não reportou nenhuma ocorrência.</div>
+            ) : (
+               myIncidents.map(inc => (
+                 <div key={inc.id} style={{ background: "var(--color-surface)", borderRadius: "var(--radius-md)", padding: "1rem", border: "1px solid var(--color-border)" }}>
+                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+                     <span style={{ fontSize: "0.75rem", fontWeight: 700, color: inc.status === "open" ? "#ef4444" : "#10b981", background: inc.status === "open" ? "rgba(239,68,68,0.1)" : "rgba(16,185,129,0.1)", padding: "0.15rem 0.5rem", borderRadius: "999px" }}>
+                       {inc.status === "open" ? "ABERTO" : "RESOLVIDO"}
+                     </span>
+                     <span style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)" }}>
+                       {new Date(inc.createdAt).toLocaleString("pt-PT", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}
+                     </span>
+                   </div>
+                   <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem" }}>{inc.message}</p>
+                   <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)", display: "block", marginBottom: inc.photoUrl ? "0.5rem" : 0 }}>Local: {inc.locatorName}</span>
+                   {inc.photoUrl && (
+                     <img src={inc.photoUrl} alt="Foto" style={{ width: "100%", maxHeight: "200px", objectFit: "cover", borderRadius: "var(--radius-sm)" }} />
+                   )}
+                 </div>
+               ))
+            )}
           </div>
         </div>
       )}
