@@ -55,7 +55,7 @@ export const WorkplaceProvider = ({ children }: { children: React.ReactNode }) =
     } else if (user.role === "vigia") {
       // For Vigia, we don't load all workplaces, but we need to know their active workplace ID
       // so components like EmergencyBanner can work.
-      const unsubShifts = onSnapshot(query(collection(db, "shifts"), where("vigiaId", "==", user.uid), where("status", "in", ["pending", "active"])), (snap) => {
+      const unsubShifts = onSnapshot(query(collection(db, "shifts"), where("personId", "==", user.uid), where("status", "in", ["pending", "active"])), (snap) => {
         let wpId = user.workplaceId || null;
         let isActive = false;
         if (!snap.empty) {

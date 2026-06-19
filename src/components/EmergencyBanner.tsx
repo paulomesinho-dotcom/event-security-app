@@ -165,7 +165,7 @@ export default function EmergencyBanner() {
             <div>
               <div style={{ fontWeight: 800, fontSize: "0.9rem" }}>⚠️ EMERGÊNCIA NO LOCAL</div>
               <div style={{ fontSize: "1rem" }}>{em.name}</div>
-              {em.id === activeWorkplaceId && !hasActiveShift && (
+              {user.role === "vigia" && em.id === activeWorkplaceId && !hasActiveShift && (
                 <div style={{ fontSize: "0.8rem", marginTop: "0.25rem", opacity: 0.9 }}>Recebeu esta notificação porque não tem um turno ativo neste local.</div>
               )}
             </div>
