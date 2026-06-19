@@ -527,32 +527,54 @@ export default function VigiaDashboard() {
       )}
 
       {showIncidentModal && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.85)", zIndex: 10000, display: "flex", alignItems: "flex-end", justifyContent: "center", padding: 0 }}>
-          <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-lg) var(--radius-lg) 0 0", width: "100%", maxWidth: "600px", overflow: "hidden", maxHeight: "90dvh", display: "flex", flexDirection: "column" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1.25rem 1.5rem", background: "linear-gradient(135deg, #dc2626, #ef4444)", color: "white", flexShrink: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                <div style={{ background: "rgba(255,255,255,0.2)", padding: "0.5rem", borderRadius: "50%" }}><FileWarning size={20}/></div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800 }}>Reportar Ocorrência</h3>
-                  <p style={{ margin: 0, fontSize: "0.75rem", opacity: 0.8 }}>Será enviada ao Capitão imediatamente</p>
-                </div>
-              </div>
-              <button onClick={() => setShowIncidentModal(false)} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "white", cursor: "pointer", borderRadius: "50%", width: "34px", height: "34px", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={18}/></button>
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "500px", padding: "2rem", position: "relative" }}>
+            <button onClick={() => setShowIncidentModal(false)} style={{ position: "absolute", top: "1.5rem", right: "1.5rem", background: "transparent", border: "none", color: "var(--color-text-secondary)", cursor: "pointer" }}>
+              <X size={24} />
+            </button>
+            <h2 style={{ margin: "0 0 1.5rem 0", color: "var(--color-danger)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <AlertTriangle size={24} /> Reportar Ocorrência
+            </h2>
+            <p style={{ color: "var(--color-text-secondary)", marginBottom: "1.5rem", fontSize: "0.9rem" }}>
+              Registe informações vitais (ex: feridos, suspeito avistado). Esta ocorrência será imediatamente enviada ao Capitão.
+            </p>
+
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600 }}>Descrição *</label>
+              <textarea 
+                className="input" 
+                rows={3} 
+                value={incidentText} 
+                onChange={e => setIncidentText(e.target.value)}
+                placeholder="Descreva a situação..."
+                style={{ resize: "vertical" }}
+              />
             </div>
-            <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem", overflowY: "auto", flex: 1 }}>
-              <div>
-                <label style={{ display: "block", fontSize: "0.9rem", marginBottom: "0.5rem", fontWeight: 700 }}>Descrição da Ocorrência *</label>
-                <textarea rows={5} value={incidentText} onChange={e => setIncidentText(e.target.value)} placeholder="Descreva detalhadamente o que está a acontecer..." style={{ width: "100%", padding: "0.75rem", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", resize: "none", fontSize: "0.95rem", lineHeight: 1.5 }}></textarea>
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: "0.9rem", marginBottom: "0.5rem", fontWeight: 700 }}>Fotografia (Opcional)</label>
-                <input type="file" accept="image/*" capture="environment" onChange={e => setIncidentPhoto(e.target.files?.[0] || null)} style={{ width: "100%", fontSize: "0.9rem" }} />
-                {incidentPhoto && <p style={{ margin: "0.35rem 0 0", fontSize: "0.75rem", color: "var(--color-success)" }}>✓ {incidentPhoto.name}</p>}
-              </div>
-              <button onClick={submitIncident} disabled={incidentUploading || !incidentText} style={{ width: "100%", padding: "1.1rem", background: incidentUploading || !incidentText ? "#e5e7eb" : "linear-gradient(135deg, #dc2626, #ef4444)", color: incidentUploading || !incidentText ? "#9ca3af" : "white", border: "none", borderRadius: "var(--radius-md)", fontWeight: 800, cursor: incidentUploading || !incidentText ? "not-allowed" : "pointer", fontSize: "1rem", letterSpacing: "0.02em" }}>
-                {incidentUploading ? "⏳ A ENVIAR..." : "🚨 ENVIAR AO CAPITÃO"}
-              </button>
+
+            <div style={{ marginBottom: "2rem" }}>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600 }}>Fotografia (Opcional)</label>
+              <input 
+                type="file" 
+                accept="image/*" 
+                onChange={e => setIncidentPhoto(e.target.files?.[0] || null)}
+                className="input"
+                style={{ padding: "0.75rem", width: "100%" }}
+              />
+              {incidentPhoto && <p style={{ margin: "0.35rem 0 0", fontSize: "0.75rem", color: "var(--color-success)" }}>✓ {incidentPhoto.name}</p>}
             </div>
+
+            <button 
+              onClick={submitIncident} 
+              disabled={incidentUploading || !incidentText}
+              style={{
+                width: "100%", padding: "1rem", background: "var(--color-danger)", color: "white",
+                border: "none", borderRadius: "var(--radius-md)", fontWeight: 700, fontSize: "1rem",
+                cursor: (incidentUploading || !incidentText) ? "not-allowed" : "pointer",
+                opacity: (incidentUploading || !incidentText) ? 0.6 : 1
+              }}
+            >
+              {incidentUploading ? "A ENVIAR..." : "ENVIAR OCORRÊNCIA"}
+            </button>
           </div>
         </div>
       )}
