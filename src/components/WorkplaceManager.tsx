@@ -11,6 +11,7 @@ interface Workplace {
   captainId: string;
   planIds: string[];
   zelloChannelLink?: string;
+  whatsappGroupLink?: string;
 }
 
 interface User {
@@ -174,6 +175,16 @@ export default function WorkplaceManager() {
                         defaultValue={workplace.zelloChannelLink || ""} 
                         onBlur={(e) => updateDoc(doc(db, "workplaces", workplace.id), { zelloChannelLink: e.target.value })}
                         placeholder="zello://canal-seguranca"
+                        style={{ marginBottom: "1rem" }}
+                      />
+
+                      <h5 style={{ marginBottom: "0.5rem" }}>Grupo WhatsApp (Opcional)</h5>
+                      <input 
+                        type="text" 
+                        className="input" 
+                        defaultValue={workplace.whatsappGroupLink || ""} 
+                        onBlur={(e) => updateDoc(doc(db, "workplaces", workplace.id), { whatsappGroupLink: e.target.value })}
+                        placeholder="https://chat.whatsapp.com/..."
                         style={{ marginBottom: "1.5rem" }}
                       />
 

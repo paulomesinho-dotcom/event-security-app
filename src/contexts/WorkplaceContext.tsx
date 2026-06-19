@@ -10,6 +10,8 @@ export interface Workplace {
   name: string;
   captainId: string;
   planIds: string[];
+  zelloChannelLink?: string;
+  whatsappGroupLink?: string;
 }
 
 interface WorkplaceContextType {
