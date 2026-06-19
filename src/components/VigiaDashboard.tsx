@@ -314,7 +314,8 @@ export default function VigiaDashboard() {
   const whatsappLink = activeWorkplace?.whatsappGroupLink;
 
   return (
-    <div className="animate-fade-in" style={{ maxWidth: "860px", margin: "0 auto", padding: "0 0.25rem 90px 0.25rem" }}>
+    <>
+    <div className="animate-fade-in" style={{ maxWidth: "860px", margin: "0 auto", padding: "0 0.25rem 1rem 0.25rem" }}>
       {fcmBanner && (
         <div style={{ marginBottom: "1rem", display: "flex", gap: "0.75rem", alignItems: "flex-start", padding: "0.9rem 1rem", background: "linear-gradient(135deg, #1e1b4b, #312e81)", borderRadius: "var(--radius-lg)", color: "white", boxShadow: "0 4px 20px rgba(99,102,241,0.4)", animation: "slideDown 0.3s ease" }}>
           <Bell size={18} style={{ flexShrink: 0, marginTop: "0.1rem", color: "#a5b4fc" }} />
@@ -495,7 +496,7 @@ export default function VigiaDashboard() {
       )}
 
       {showMapForShift && shiftPlanUrl && shiftLocator && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.9)", zIndex: 200, display: "flex", flexDirection: "column" }}>
+        <div className="vigia-map-modal">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.85rem 1rem", background: "#151F31", color: "white", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", minWidth: 0 }}>
               <div style={{ background: "rgba(255,255,255,0.1)", padding: "0.45rem", borderRadius: "var(--radius-md)", flexShrink: 0 }}>
@@ -559,36 +560,6 @@ export default function VigiaDashboard() {
         </div>
       )}
 
-      {/* FIXED BOTTOM NAVIGATION BAR */}
-      <div style={{ 
-        position: "fixed", bottom: 0, left: 0, right: 0, 
-        background: "var(--color-surface)", borderTop: "1px solid var(--color-border)",
-        padding: "0.75rem 0.5rem", display: "flex", gap: "0.5rem", zIndex: 8000,
-        boxShadow: "0 -4px 12px rgba(0,0,0,0.1)", overflowX: "auto",
-        paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))"
-      }}>
-        {activeShift && (
-          <>
-            {zelloLink && (
-              <a href={zelloLink} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.25rem", background: "rgba(249, 115, 22, 0.15)", color: "#f97316", padding: "0.5rem", borderRadius: "var(--radius-md)", textDecoration: "none", fontWeight: 600, fontSize: "0.7rem", border: "1px solid rgba(249, 115, 22, 0.3)", flex: "1 0 auto", minWidth: "65px" }}>
-                <Play size={18} fill="currentColor" /> Rádio
-              </a>
-            )}
-            {whatsappLink && (
-              <a href={whatsappLink} target="_blank" rel="noopener noreferrer" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.25rem", background: "rgba(34, 197, 94, 0.15)", color: "#22c55e", padding: "0.5rem", borderRadius: "var(--radius-md)", textDecoration: "none", fontWeight: 600, fontSize: "0.7rem", border: "1px solid rgba(34, 197, 94, 0.3)", flex: "1 0 auto", minWidth: "65px" }}>
-                <MessageCircle size={18} fill="currentColor" /> Chat
-              </a>
-            )}
-            <button onClick={() => setShowIncidentModal(true)} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.25rem", background: "#ef4444", color: "white", padding: "0.5rem", borderRadius: "var(--radius-md)", border: "none", fontWeight: 600, fontSize: "0.7rem", flex: "1 0 auto", minWidth: "65px", cursor: "pointer", boxShadow: "0 2px 8px rgba(239,68,68,0.3)" }}>
-              <FileWarning size={18} /> Ocorrência
-            </button>
-          </>
-        )}
-        <button onClick={() => setShowHistoryModal(true)} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.25rem", background: "transparent", color: "var(--color-text-secondary)", padding: "0.5rem", borderRadius: "var(--radius-md)", border: "none", fontWeight: 600, fontSize: "0.7rem", flex: "1 0 auto", minWidth: "65px", cursor: "pointer" }}>
-          <Clock size={18} /> {myIncidents.length > 0 ? `(${myIncidents.length}) Histórico` : `Histórico`}
-        </button>
-      </div>
-
       <style>{`
         @keyframes pulse {
           0%, 100% { box-shadow: 0 0 0 3px rgba(16,185,129,0.2); }
@@ -596,5 +567,30 @@ export default function VigiaDashboard() {
         }
       `}</style>
     </div>
+
+    {/* BOTTOM NAVIGATION BAR — flex sibling of main scroll area */}
+    <div className="vigia-app-bottom-bar">
+      {activeShift && (
+        <>
+          {zelloLink && (
+            <a href={zelloLink} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.25rem", background: "rgba(249, 115, 22, 0.15)", color: "#f97316", padding: "0.5rem", borderRadius: "var(--radius-md)", textDecoration: "none", fontWeight: 600, fontSize: "0.7rem", border: "1px solid rgba(249, 115, 22, 0.3)", flex: "1 0 auto", minWidth: "65px" }}>
+              <Play size={18} fill="currentColor" /> Rádio
+            </a>
+          )}
+          {whatsappLink && (
+            <a href={whatsappLink} target="_blank" rel="noopener noreferrer" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.25rem", background: "rgba(34, 197, 94, 0.15)", color: "#22c55e", padding: "0.5rem", borderRadius: "var(--radius-md)", textDecoration: "none", fontWeight: 600, fontSize: "0.7rem", border: "1px solid rgba(34, 197, 94, 0.3)", flex: "1 0 auto", minWidth: "65px" }}>
+              <MessageCircle size={18} fill="currentColor" /> Chat
+            </a>
+          )}
+          <button onClick={() => setShowIncidentModal(true)} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.25rem", background: "#ef4444", color: "white", padding: "0.5rem", borderRadius: "var(--radius-md)", border: "none", fontWeight: 600, fontSize: "0.7rem", flex: "1 0 auto", minWidth: "65px", cursor: "pointer", boxShadow: "0 2px 8px rgba(239,68,68,0.3)" }}>
+            <FileWarning size={18} /> Ocorrência
+          </button>
+        </>
+      )}
+      <button onClick={() => setShowHistoryModal(true)} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.25rem", background: "transparent", color: "var(--color-text-secondary)", padding: "0.5rem", borderRadius: "var(--radius-md)", border: "none", fontWeight: 600, fontSize: "0.7rem", flex: "1 0 auto", minWidth: "65px", cursor: "pointer" }}>
+        <Clock size={18} /> {myIncidents.length > 0 ? `(${myIncidents.length}) Histórico` : `Histórico`}
+      </button>
+    </div>
+    </>
   );
 }

@@ -135,28 +135,26 @@ export default function DashboardPage() {
     return <div style={{ padding: "2rem", textAlign: "center" }}>A carregar o painel...</div>;
   }
 
-  // Vigia Dashboard - Keep it simple and full screen
+  // Vigia Dashboard — Mobile-first, dvh-based layout
   if (user.role === "vigia") {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "var(--color-bg)" }}>
+      <div className="vigia-app-root">
         <EmergencyBanner />
-        <nav style={{ 
-          display: "flex", justifyContent: "space-between", padding: "1rem 2rem", 
+        <nav className="vigia-app-nav" style={{ 
+          display: "flex", justifyContent: "space-between", padding: "0.75rem 1rem", 
           backgroundColor: "var(--color-surface)", borderBottom: "1px solid var(--color-border)", alignItems: "center"
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-            <Image src="/logo.jpg" alt="Porto 2026 Logo" width={40} height={40} style={{ borderRadius: "var(--radius-md)", objectFit: "cover" }} />
-            <h1 style={{ fontSize: "1.25rem", color: "var(--color-primary)", fontWeight: 700, margin: 0 }}>Porto 2026</h1>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <Image src="/logo.jpg" alt="Porto 2026 Logo" width={36} height={36} style={{ borderRadius: "var(--radius-md)", objectFit: "cover" }} />
+            <h1 style={{ fontSize: "1.1rem", color: "var(--color-primary)", fontWeight: 700, margin: 0 }}>Porto 2026</h1>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-            <span style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>Olá, {user.name}</span>
-            <button onClick={handleLogout} className="btn btn-secondary" style={{ padding: "0.4rem 0.75rem" }}><LogOut size={16} /> Sair</button>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <span style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)" }}>{user.name}</span>
+            <button onClick={handleLogout} className="btn btn-secondary" style={{ padding: "0.35rem 0.6rem", fontSize: "0.8rem" }}><LogOut size={14} /></button>
           </div>
         </nav>
-        <main style={{ padding: "2rem", flex: 1, overflowY: "auto" }}>
-          <div style={{ maxWidth: "1200px", margin: "0 auto", width: "100%" }}>
-            <VigiaDashboard />
-          </div>
+        <main className="vigia-app-main" style={{ padding: "1rem 0.5rem" }}>
+          <VigiaDashboard />
         </main>
       </div>
     );
