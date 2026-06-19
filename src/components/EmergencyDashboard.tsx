@@ -42,6 +42,7 @@ export default function EmergencyDashboard() {
   const [missingDesc, setMissingDesc] = useState("");
   const [missingPhoto, setMissingPhoto] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [showMissingForm, setShowMissingForm] = useState(false);
   
   const [activeTab, setActiveTab] = useState<TabType>("local_evac");
   const [searchQuery, setSearchQuery] = useState("");
@@ -123,6 +124,9 @@ export default function EmergencyDashboard() {
   const closeEmergencyHistory = async (type: "global" | "workplace", workplaceId?: string) => {
     try {
       const qConstraints: any[] = [where("status", "==", "active"), where("type", "==", type)];
+      if (type === "global") {
+        qConstraints.push(where("alertType", "==", "evacuation"));
+      }
       if (type === "workplace" && workplaceId) {
         qConstraints.push(where("workplaceId", "==", workplaceId));
       }
@@ -141,7 +145,7 @@ export default function EmergencyDashboard() {
     } catch(e) { console.error("Error closing history", e); }
   };
 
-  const createEmergencyHistory = async (type: "global" | "workplace", alertType: string, workplaceId?: string) => {
+  const createEmergencyHistory = async (type: "global" | "workplace", alertType: string, workplaceId?: string, extraData?: any) => {
     try {
       await addDoc(collection(db, "emergency_history"), {
          type,
@@ -149,13 +153,15 @@ export default function EmergencyDashboard() {
          workplaceId: workplaceId || null,
          status: "active",
          startTime: new Date().toISOString(),
-         initiatedBy: user?.uid
+         initiatedBy: user?.uid,
+         ...extraData
       });
     } catch(e) { console.error("Error creating history", e); }
   };
 
   const clearDashboardManual = async () => {
-     if (globalEmergency || workplaceEmergency) {
+     const activeMissing = history.filter(h => h.status === "active" && h.alertType === "missing_person");
+     if (globalEmergency || workplaceEmergency || activeMissing.length > 0) {
         alert("Não pode limpar o ecrã durante uma emergência ativa. Desative a emergência primeiro.");
         return;
      }
@@ -232,22 +238,36 @@ export default function EmergencyDashboard() {
         photoUrl = await getDownloadURL(fileRef);
       }
       
-      await setDoc(doc(db, "settings", "global"), { 
-        globalEmergency: true, 
-        globalAlertType: "missing_person",
-        globalAlertDetails: { description: missingDesc, photoUrl },
-        globalAlertAck: [user.uid],
-        globalEvacAck: []
-      }, { merge: true });
-      await createEmergencyHistory("global", "missing_person");
+      await createEmergencyHistory("global", "missing_person", undefined, {
+        description: missingDesc,
+        photoUrl,
+        alertAck: [user.uid]
+      });
       
       setMissingDesc("");
       setMissingPhoto(null);
+      setShowMissingForm(false);
     } catch (err) {
       console.error(err);
       alert("Erro ao disparar alerta.");
     } finally {
       setUploading(false);
+    }
+  };
+
+  const closeMissingPerson = async (id: string) => {
+    const resolution = prompt("Qual o desfecho desta ocorrência? (ex: Pessoa encontrada pela equipa)");
+    if (resolution === null) return;
+    
+    try {
+      await updateDoc(doc(db, "emergency_history", id), {
+        status: "closed",
+        endTime: new Date().toISOString(),
+        resolution: resolution.trim() || "Sem detalhes"
+      });
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao fechar ocorrência.");
     }
   };
 
@@ -617,70 +637,121 @@ export default function EmergencyDashboard() {
 
         {activeTab === "missing" && isSuperadmin && (
           <div className="animate-fade-in">
-             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
+             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "2rem" }}>
                <div style={{ maxWidth: "600px" }}>
-                 <h2 style={{ fontSize: "1.15rem", fontWeight: 700, margin: "0 0 0.25rem 0", color: "var(--color-text-primary)" }}>Alerta de Pessoa Desaparecida</h2>
+                 <h2 style={{ fontSize: "1.15rem", fontWeight: 700, margin: "0 0 0.25rem 0", color: "var(--color-text-primary)" }}>Pessoas Desaparecidas</h2>
                  <p style={{ color: "var(--color-text-secondary)", lineHeight: 1.4, margin: 0, fontSize: "0.85rem" }}>
-                   Dispara um alerta global para todas as equipas focarem a sua atenção na procura. Adicione o máximo de detalhes possível.
+                   Pode haver várias buscas em simultâneo. Inicie uma nova busca para alertar toda a equipa.
                  </p>
                </div>
-
-               {globalEmergency && globalAlertType === "missing_person" && (
-                 <button onClick={toggleGlobal} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.75rem 1.5rem", background: "transparent", border: "2px solid #eab308", color: "#eab308", borderRadius: "var(--radius-md)", fontWeight: 600, cursor: "pointer", fontSize: "0.95rem" }}>
-                   DESATIVAR ALERTA DE BUSCA
-                 </button>
-               )}
+               <button 
+                 onClick={() => setShowMissingForm(true)}
+                 style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.75rem 1.5rem", background: "#eab308", color: "#000", border: "none", borderRadius: "var(--radius-full)", fontWeight: 700, cursor: "pointer", fontSize: "0.9rem" }}
+               >
+                 <span style={{ fontSize: "1.2rem" }}>+</span> NOVO ALERTA
+               </button>
              </div>
 
-             {globalEmergency && globalAlertType === "missing_person" ? (
-                <>
-                  <div style={{ background: "rgba(234, 179, 8, 0.05)", borderLeft: "4px solid #eab308", padding: "0.75rem 1rem", borderRadius: "0 var(--radius-md) var(--radius-md) 0", marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                    <div style={{ background: "#eab308", width: 10, height: 10, borderRadius: "50%", animation: "pulse 2s infinite" }} />
-                    <span style={{ color: "#eab308", fontWeight: 600, letterSpacing: "0.05em", fontSize: "0.85rem" }}>BUSCA ATIVA EM CURSO</span>
+             {showMissingForm && (
+                <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000, padding: "1rem" }}>
+                  <div style={{ background: "var(--color-bg)", width: "100%", maxWidth: "600px", borderRadius: "var(--radius-xl)", overflow: "hidden", animation: "slideUp 0.3s ease-out" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1.5rem", borderBottom: "1px solid var(--color-border)" }}>
+                      <h3 style={{ margin: 0, fontSize: "1.25rem", display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--color-text-primary)" }}>
+                        <Search size={24} color="#eab308" />
+                        Nova Pessoa Desaparecida
+                      </h3>
+                      <button onClick={() => setShowMissingForm(false)} style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", cursor: "pointer" }}>
+                        <X size={24} />
+                      </button>
+                    </div>
+                    
+                    <div style={{ padding: "1.5rem" }}>
+                      <div style={{ marginBottom: "1.5rem" }}>
+                         <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600, color: "var(--color-text-primary)" }}>Descrição Completa (Obrigatório)</label>
+                         <textarea 
+                           className="input" 
+                           rows={4} 
+                           value={missingDesc} 
+                           onChange={e => setMissingDesc(e.target.value)} 
+                           placeholder="Ex: Criança, aprox. 5 anos, t-shirt azul do porto, chora e procura pela mãe..."
+                           style={{ width: "100%", padding: "1rem", background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", color: "var(--color-text-primary)", resize: "vertical" }}
+                         />
+                      </div>
+
+                      <div style={{ marginBottom: "2.5rem" }}>
+                         <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600, color: "var(--color-text-primary)" }}>Fotografia de Referência (Opcional mas recomendado)</label>
+                         <input 
+                           type="file" 
+                           accept="image/*" 
+                           onChange={e => setMissingPhoto(e.target.files?.[0] || null)} 
+                           style={{ width: "100%", padding: "0.75rem", background: "var(--color-surface)", border: "1px dashed var(--color-border)", borderRadius: "var(--radius-md)", color: "var(--color-text-secondary)" }} 
+                         />
+                      </div>
+
+                      <div style={{ display: "flex", justifyContent: "flex-end", gap: "1rem" }}>
+                        <button onClick={() => setShowMissingForm(false)} style={{ padding: "0.85rem 1.5rem", background: "transparent", color: "var(--color-text-primary)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", fontWeight: 600, cursor: "pointer" }}>
+                          Cancelar
+                        </button>
+                        <button 
+                           onClick={triggerMissingPerson} 
+                           disabled={uploading || !missingDesc} 
+                           style={{ 
+                             display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.85rem 2rem", 
+                             background: (uploading || !missingDesc) ? "var(--color-surface)" : "#eab308", 
+                             color: (uploading || !missingDesc) ? "var(--color-text-tertiary)" : "#000", 
+                             border: "none", borderRadius: "var(--radius-md)", fontWeight: 700, cursor: (uploading || !missingDesc) ? "not-allowed" : "pointer" 
+                           }}
+                         >
+                          <Eye size={20} />
+                          {uploading ? "A DISPARAR..." : "DISPARAR ALERTA"}
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  {renderUserTable(allUsers, globalAlertAck, globalEvacAck, false, null)}
-                </>
-             ) : (
-                <div style={{ background: "var(--color-bg)", padding: "2rem", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)", maxWidth: "800px" }}>
-                   <div style={{ marginBottom: "1.5rem" }}>
-                      <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600, color: "var(--color-text-primary)" }}>Descrição Completa (Obrigatório)</label>
-                      <textarea 
-                        className="input" 
-                        rows={4} 
-                        value={missingDesc} 
-                        onChange={e => setMissingDesc(e.target.value)} 
-                        placeholder="Ex: Criança, aprox. 5 anos, t-shirt azul do porto, chora e procura pela mãe, visto pela última vez perto da Porta 3..."
-                        style={{ width: "100%", padding: "1rem", background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", color: "var(--color-text-primary)", resize: "vertical" }}
-                      />
-                   </div>
-
-                   <div style={{ marginBottom: "2.5rem" }}>
-                      <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600, color: "var(--color-text-primary)" }}>Fotografia de Referência (Opcional mas recomendado)</label>
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        onChange={e => setMissingPhoto(e.target.files?.[0] || null)} 
-                        style={{ width: "100%", padding: "0.75rem", background: "var(--color-surface)", border: "1px dashed var(--color-border)", borderRadius: "var(--radius-md)", color: "var(--color-text-secondary)" }} 
-                      />
-                   </div>
-
-                   <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                     <button 
-                        onClick={triggerMissingPerson} 
-                        disabled={uploading || !missingDesc || (globalEmergency && globalAlertType !== "missing_person")} 
-                        style={{ 
-                          display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.85rem 2rem", 
-                          background: (uploading || !missingDesc) ? "var(--color-bg)" : "#eab308", 
-                          color: (uploading || !missingDesc) ? "var(--color-text-tertiary)" : "#000", 
-                          border: "none", borderRadius: "var(--radius-md)", fontWeight: 700, cursor: (uploading || !missingDesc) ? "not-allowed" : "pointer", fontSize: "1rem", transition: "all 0.2s" 
-                        }}
-                      >
-                       <Eye size={20} />
-                       {uploading ? "A DISPARAR..." : "DISPARAR ALERTA DE BUSCA"}
-                     </button>
-                   </div>
                 </div>
              )}
+
+             {(() => {
+                const activeMissing = history.filter(h => h.status === "active" && h.alertType === "missing_person");
+                if (activeMissing.length === 0) return (
+                   <div style={{ textAlign: "center", padding: "4rem", background: "var(--color-surface)", borderRadius: "var(--radius-lg)", border: "1px dashed var(--color-border)" }}>
+                     <Search size={48} color="var(--color-text-tertiary)" style={{ margin: "0 auto 1rem auto" }} />
+                     <h3 style={{ margin: "0 0 0.5rem 0", color: "var(--color-text-secondary)" }}>Nenhuma busca ativa</h3>
+                     <p style={{ margin: 0, color: "var(--color-text-tertiary)", fontSize: "0.85rem" }}>Se alguém se perder, inicie um novo alerta para notificar toda a equipa imediatamente.</p>
+                   </div>
+                );
+                
+                return (
+                  <div>
+                    <h3 style={{ margin: "0 0 1rem 0", color: "var(--color-text-primary)", fontSize: "1.2rem" }}>Buscas em Curso ({activeMissing.length})</h3>
+                    {activeMissing.map(am => (
+                      <div key={am.id} style={{ background: "var(--color-surface)", border: "1px solid #eab308", borderRadius: "var(--radius-lg)", marginBottom: "2rem", overflow: "hidden" }}>
+                        <div style={{ background: "rgba(234, 179, 8, 0.1)", padding: "1.5rem", display: "flex", gap: "1.5rem", borderBottom: "1px solid rgba(234, 179, 8, 0.2)" }}>
+                          {am.photoUrl && (
+                            <img src={am.photoUrl} alt="Missing" style={{ width: "120px", height: "120px", objectFit: "cover", borderRadius: "var(--radius-md)" }} />
+                          )}
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                              <div>
+                                <span style={{ display: "inline-block", background: "#eab308", color: "#000", padding: "0.25rem 0.5rem", borderRadius: "var(--radius-full)", fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.5rem" }}>
+                                  Iniciado às {new Date(am.startTime).toLocaleTimeString("pt-PT")}
+                                </span>
+                                <p style={{ margin: 0, color: "var(--color-text-primary)", fontSize: "1rem", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{am.description}</p>
+                              </div>
+                              <button onClick={() => closeMissingPerson(am.id)} style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 1rem", background: "var(--color-bg)", border: "2px solid #eab308", color: "#eab308", borderRadius: "var(--radius-md)", fontWeight: 700, cursor: "pointer", fontSize: "0.85rem" }}>
+                                FECHAR OCORRÊNCIA
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ padding: "0 1rem 1rem 1rem" }}>
+                           {renderUserTable(allUsers, am.alertAck || [], [], false, null)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+             })()}
           </div>
          )}
 
@@ -744,6 +815,13 @@ export default function EmergencyDashboard() {
                                   </div>
                                </div>
                             </div>
+
+                            {item.resolution && (
+                                <div style={{ background: "rgba(16, 185, 129, 0.05)", padding: "1rem", borderRadius: "var(--radius-md)", marginTop: "1rem", borderLeft: "4px solid #10b981" }}>
+                                  <span style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#10b981", textTransform: "uppercase", marginBottom: "0.25rem" }}>Desfecho da Ocorrência</span>
+                                  <p style={{ margin: 0, color: "var(--color-text-primary)", fontSize: "0.95rem", whiteSpace: "pre-wrap" }}>{item.resolution}</p>
+                                </div>
+                             )}
 
                             {itemIncidents.length > 0 && (
                                <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "1.5rem" }}>

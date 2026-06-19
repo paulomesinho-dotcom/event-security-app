@@ -6,7 +6,7 @@ import { doc, onSnapshot, setDoc, collection, query, where, addDoc } from "fireb
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useWorkplace } from "@/contexts/WorkplaceContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { AlertTriangle, CheckCircle2, ShieldAlert, X, Camera, Bell, Image as ImageIcon } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ShieldAlert, X, Camera, Bell, Image as ImageIcon, Eye } from "lucide-react";
 
 export default function EmergencyBanner() {
   const { user } = useAuth();
@@ -27,6 +27,25 @@ export default function EmergencyBanner() {
   const [incidentMsg, setIncidentMsg] = useState("");
   const [incidentPhoto, setIncidentPhoto] = useState<File | null>(null);
   const [submittingIncident, setSubmittingIncident] = useState(false);
+
+  // Missing Persons from history
+  const [activeMissingPersons, setActiveMissingPersons] = useState<any[]>([]);
+  const [showMissingDetails, setShowMissingDetails] = useState<any | null>(null);
+
+  // Listen to Active Missing Persons
+  useEffect(() => {
+    const q = query(
+      collection(db, "emergency_history"), 
+      where("status", "==", "active"),
+      where("alertType", "==", "missing_person")
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const msgs: any[] = [];
+      snap.forEach(d => msgs.push({ id: d.id, ...d.data() }));
+      setActiveMissingPersons(msgs);
+    });
+    return () => unsub();
+  }, []);
 
   // Listen to Global Emergency
   useEffect(() => {
@@ -62,38 +81,48 @@ export default function EmergencyBanner() {
   const myLocalEmergency = localEmergencies.find(e => e.id === activeWorkplaceId);
   const otherLocalEmergencies = localEmergencies.filter(e => e.id !== activeWorkplaceId);
 
-  // Full Screen Block logic:
-  // - Global or Missing Person -> Block ONLY if hasActiveShift
-  // - Local (my workplace) -> Block ONLY if hasActiveShift
-  const isBlockingEmergency = (globalEmergency || myLocalEmergency) && hasActiveShift;
-  
-  // Non-blocking notifications logic:
-  // - An emergency exists (global or local) but I don't have an active shift
-  const hasNonBlockingNotifications = !isBlockingEmergency && (globalEmergency || localEmergencies.length > 0);
+  const isEvacuation = (globalEmergency && globalAlertType === "evacuation") || !!myLocalEmergency;
+  const unackedMissing = activeMissingPersons.filter(m => !(m.alertAck || []).includes(user.uid));
+  const ackedMissing = activeMissingPersons.filter(m => (m.alertAck || []).includes(user.uid));
+  const currentMissing = unackedMissing[0];
 
-  if (!isBlockingEmergency && !hasNonBlockingNotifications) return null;
-
-  const isMissingPerson = globalEmergency && globalAlertType === "missing_person";
-  const isEvacuation = globalEmergency ? globalAlertType === "evacuation" : !!myLocalEmergency;
-  
-  // Acknowledge logic for blocking emergency
   let needsToAcknowledge = false;
   let hasEvacuated = false;
-  let activeEmergencyId = ""; // To attach incident reports
+  let activeEmergencyId = "";
+  let isMissingPersonBlock = false;
+  let missingPersonData: any = null;
 
-  if (globalEmergency) {
-    needsToAcknowledge = !globalAlertAck.includes(user.uid);
-    hasEvacuated = globalEvacAck.includes(user.uid);
-    activeEmergencyId = "global";
-  } else if (myLocalEmergency && hasActiveShift) {
-    needsToAcknowledge = !(myLocalEmergency.alertAck || []).includes(user.uid);
-    hasEvacuated = (myLocalEmergency.evacAck || []).includes(user.uid);
-    activeEmergencyId = myLocalEmergency.id;
+  if (hasActiveShift) {
+    if (isEvacuation && globalEmergency && globalAlertType === "evacuation" && !globalAlertAck.includes(user.uid)) {
+      needsToAcknowledge = true;
+      hasEvacuated = globalEvacAck.includes(user.uid);
+      activeEmergencyId = "global";
+    } else if (isEvacuation && myLocalEmergency && !(myLocalEmergency.alertAck || []).includes(user.uid)) {
+      needsToAcknowledge = true;
+      hasEvacuated = (myLocalEmergency.evacAck || []).includes(user.uid);
+      activeEmergencyId = myLocalEmergency.id;
+    } else if (currentMissing) {
+      needsToAcknowledge = true;
+      isMissingPersonBlock = true;
+      missingPersonData = currentMissing;
+      activeEmergencyId = currentMissing.id;
+    } else if (isEvacuation) {
+      hasEvacuated = globalEmergency ? globalEvacAck.includes(user.uid) : (myLocalEmergency?.evacAck || []).includes(user.uid);
+      activeEmergencyId = globalEmergency ? "global" : myLocalEmergency?.id || "";
+    }
   }
+
+  const isBlockingEmergency = hasActiveShift && needsToAcknowledge;
+  const hasActiveBanners = hasActiveShift && !needsToAcknowledge && (isEvacuation || ackedMissing.length > 0);
+  const hasNonBlockingNotifications = !hasActiveShift && (globalEmergency || localEmergencies.length > 0 || activeMissingPersons.length > 0);
+
+  if (!isBlockingEmergency && !hasActiveBanners && !hasNonBlockingNotifications && !showMissingDetails && !showIncidentModal) return null;
 
   const handleAcknowledge = async () => {
     try {
-      if (globalEmergency) {
+      if (isMissingPersonBlock && missingPersonData) {
+        await setDoc(doc(db, "emergency_history", missingPersonData.id), { alertAck: [...(missingPersonData.alertAck || []), user.uid] }, { merge: true });
+      } else if (globalEmergency && globalAlertType === "evacuation") {
         await setDoc(doc(db, "settings", "global"), { globalAlertAck: [...globalAlertAck, user.uid] }, { merge: true });
       } else if (myLocalEmergency && activeWorkplaceId) {
         await setDoc(doc(db, "workplaces", activeWorkplaceId), { alertAck: [...(myLocalEmergency.alertAck || []), user.uid] }, { merge: true });
@@ -154,7 +183,7 @@ export default function EmergencyBanner() {
   };
 
   // 1. NON-BLOCKING NOTIFICATIONS (Toast style at the top)
-  if (!isBlockingEmergency && hasNonBlockingNotifications) {
+  if (hasNonBlockingNotifications) {
     return (
       <div style={{ position: "fixed", top: 10, left: 10, right: 10, zIndex: 9999, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
         {localEmergencies.map(em => (
@@ -198,29 +227,29 @@ export default function EmergencyBanner() {
         }}>
           
           <div style={{ 
-            background: isMissingPerson ? "#eab308" : "#dc2626", 
+            background: isMissingPersonBlock ? "#eab308" : "#dc2626", 
             padding: "2.5rem 2rem", display: "flex", flexDirection: "column", alignItems: "center",
             color: "white" 
           }}>
             <ShieldAlert size={56} style={{ marginBottom: "1rem", animation: "pulse 2s infinite" }} />
             <h1 style={{ fontSize: "1.75rem", fontWeight: 900, textTransform: "uppercase", margin: 0, letterSpacing: "0.05em", lineHeight: 1.1 }}>
-              {isMissingPerson ? "PESSOA DESAPARECIDA" : globalEmergency ? "EVACUAÇÃO GERAL" : "EVACUAÇÃO DE ZONA"}
+              {isMissingPersonBlock ? "PESSOA DESAPARECIDA" : (globalEmergency && globalAlertType === "evacuation") ? "EVACUAÇÃO GERAL" : "EVACUAÇÃO DE ZONA"}
             </h1>
           </div>
 
           <div style={{ padding: "2rem" }}>
-            {isMissingPerson && globalAlertDetails && (
+            {isMissingPersonBlock && missingPersonData && (
               <div style={{ background: "var(--color-bg)", padding: "1rem", borderRadius: "var(--radius-lg)", width: "100%", marginBottom: "1.5rem" }}>
-                {globalAlertDetails.photoUrl && (
-                   <img src={globalAlertDetails.photoUrl} alt="Desaparecido" style={{ width: "100%", maxHeight: "250px", objectFit: "contain", borderRadius: "var(--radius-md)", marginBottom: "1rem", background: "white" }} />
+                {missingPersonData.photoUrl && (
+                   <img src={missingPersonData.photoUrl} alt="Desaparecido" style={{ width: "100%", maxHeight: "250px", objectFit: "contain", borderRadius: "var(--radius-md)", marginBottom: "1rem", background: "white" }} />
                 )}
                 <p style={{ fontSize: "1rem", fontWeight: 500, margin: 0, textAlign: "left", whiteSpace: "pre-wrap", color: "var(--color-text-primary)" }}>
-                  {globalAlertDetails.description}
+                  {missingPersonData.description}
                 </p>
               </div>
             )}
 
-            {!isMissingPerson && (
+            {!isMissingPersonBlock && (
               <p style={{ fontSize: "1.1rem", fontWeight: 500, color: "var(--color-text-secondary)", marginTop: 0, marginBottom: "2rem" }}>
                 Por favor, proceda de imediato de acordo com o protocolo de segurança definido.
               </p>
@@ -230,9 +259,9 @@ export default function EmergencyBanner() {
               onClick={handleAcknowledge}
               style={{ 
                 padding: "1rem 2rem", fontSize: "1.15rem", fontWeight: 700,
-                background: isMissingPerson ? "#ca8a04" : "#dc2626", color: "white", border: "none", borderRadius: "var(--radius-xl)",
+                background: isMissingPersonBlock ? "#ca8a04" : "#dc2626", color: "white", border: "none", borderRadius: "var(--radius-xl)",
                 cursor: "pointer", width: "100%", transition: "transform 0.2s",
-                boxShadow: isMissingPerson ? "0 4px 14px 0 rgba(202, 138, 4, 0.39)" : "0 4px 14px 0 rgba(220, 38, 38, 0.39)"
+                boxShadow: isMissingPersonBlock ? "0 4px 14px 0 rgba(202, 138, 4, 0.39)" : "0 4px 14px 0 rgba(220, 38, 38, 0.39)"
               }}
               onMouseOver={e => e.currentTarget.style.transform = "scale(1.02)"}
               onMouseOut={e => e.currentTarget.style.transform = "scale(1)"}
@@ -245,71 +274,61 @@ export default function EmergencyBanner() {
     );
   }
 
-  // 3. ACKNOWLEDGED BANNER (Sticks to top)
-  const bannerBg = isMissingPerson ? "#eab308" : "#ef4444";
+  // 3. ACKNOWLEDGED BANNERS (Sticks to top)
   
   return (
     <>
-      <div style={{
-        width: "100%",
-        background: bannerBg,
-        color: isMissingPerson ? "#000" : "white",
-        padding: "1rem",
-        display: "flex",
-        flexDirection: "column",
-        gap: "0.75rem",
-        zIndex: 9990,
-        position: "relative",
-        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)"
-      }}>
-        
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", fontWeight: 800, fontSize: "1rem" }}>
-            <AlertTriangle size={20} style={{ animation: "pulse 2s infinite" }} />
-            <span>
-              {globalEmergency 
-                ? (isMissingPerson ? "BUSCA ATIVA: PESSOA DESAPARECIDA" : "ALERTA GLOBAL: EVACUAÇÃO EM CURSO")
-                : "ALERTA LOCAL: EVACUAÇÃO EM CURSO"}
-            </span>
+      {isEvacuation && !needsToAcknowledge && (
+        <div style={{
+          width: "100%", background: "#ef4444", color: "white", padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem", zIndex: 9990, position: "relative", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", fontWeight: 800, fontSize: "1rem" }}>
+              <AlertTriangle size={20} style={{ animation: "pulse 2s infinite" }} />
+              <span>{(globalEmergency && globalAlertType === "evacuation") ? "ALERTA GLOBAL: EVACUAÇÃO EM CURSO" : "ALERTA LOCAL: EVACUAÇÃO EM CURSO"}</span>
+            </div>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+            {(user?.role === "vigia" || user?.role === "captain") && (
+              <>
+                {!hasEvacuated ? (
+                  <button onClick={handleEvacuated} style={{ background: "white", color: "#ef4444", border: "none", padding: "0.6rem 1.25rem", borderRadius: "var(--radius-full)", fontWeight: 800, cursor: "pointer", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <CheckCircle2 size={16} /> CONFIRMAR ZONA EVACUADA
+                  </button>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", background: "rgba(255,255,255,0.2)", padding: "0.6rem 1.25rem", borderRadius: "var(--radius-full)", fontSize: "0.85rem", fontWeight: 600 }}>
+                    <CheckCircle2 size={16} /> ZONA EVACUADA
+                  </div>
+                )}
+              </>
+            )}
+            <button onClick={() => setShowIncidentModal(true)} style={{ background: "rgba(0,0,0,0.15)", color: "white", border: "1px solid rgba(255,255,255,0.3)", padding: "0.6rem 1.25rem", borderRadius: "var(--radius-full)", fontWeight: 700, cursor: "pointer", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <Camera size={16} /> REGISTAR OCORRÊNCIA
+            </button>
           </div>
         </div>
+      )}
 
-        {/* Action Buttons for Evacuation / Missing Person */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-          {isEvacuation && (user?.role === "vigia" || user?.role === "captain") && (
-            <>
-              {!hasEvacuated ? (
-                <button 
-                  onClick={handleEvacuated}
-                  style={{
-                    background: "white", color: bannerBg, border: "none", padding: "0.6rem 1.25rem",
-                    borderRadius: "var(--radius-full)", fontWeight: 800, cursor: "pointer",
-                    fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.5rem"
-                  }}
-                >
-                  <CheckCircle2 size={16} /> CONFIRMAR ZONA EVACUADA
-                </button>
-              ) : (
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", background: "rgba(255,255,255,0.2)", padding: "0.6rem 1.25rem", borderRadius: "var(--radius-full)", fontSize: "0.85rem", fontWeight: 600 }}>
-                  <CheckCircle2 size={16} /> ZONA EVACUADA
-                </div>
-              )}
-            </>
-          )}
-
-          {/* New Incident Button during Emergency */}
-          <button 
-            onClick={() => setShowIncidentModal(true)}
-            style={{
-              background: "rgba(0,0,0,0.15)", color: isMissingPerson ? "#000" : "white", border: "1px solid rgba(255,255,255,0.3)", padding: "0.6rem 1.25rem",
-              borderRadius: "var(--radius-full)", fontWeight: 700, cursor: "pointer",
-              fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.5rem"
-            }}
-          >
-            <Camera size={16} /> REGISTAR OCORRÊNCIA
-          </button>
+      {ackedMissing.length > 0 && !isMissingPersonBlock && (
+        <div style={{
+          width: "100%", background: "#eab308", color: "#000", padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem", zIndex: 9989, position: "relative", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", fontWeight: 800, fontSize: "1rem" }}>
+              <AlertTriangle size={20} style={{ animation: "pulse 2s infinite" }} />
+              <span>BUSCA ATIVA: PESSOA DESAPARECIDA ({ackedMissing.length})</span>
+            </div>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+            <button onClick={() => setShowMissingDetails(ackedMissing.length === 1 ? ackedMissing[0] : "list")} style={{ background: "white", color: "#ca8a04", border: "none", padding: "0.6rem 1.25rem", borderRadius: "var(--radius-full)", fontWeight: 800, cursor: "pointer", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <Eye size={16} /> VER DETALHES
+            </button>
+            <button onClick={() => setShowIncidentModal(true)} style={{ background: "rgba(0,0,0,0.1)", color: "#000", border: "1px solid rgba(0,0,0,0.2)", padding: "0.6rem 1.25rem", borderRadius: "var(--radius-full)", fontWeight: 700, cursor: "pointer", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <Camera size={16} /> REGISTAR OCORRÊNCIA
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Incident Modal Overlay */}
       {showIncidentModal && (
@@ -364,6 +383,40 @@ export default function EmergencyBanner() {
             >
               {submittingIncident ? "A SUBMETER..." : "ENVIAR OCORRÊNCIA"}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Missing Details Modal Overlay */}
+      {showMissingDetails && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "500px", padding: "2rem", position: "relative", maxHeight: "90vh", overflowY: "auto" }}>
+            <button onClick={() => setShowMissingDetails(null)} style={{ position: "absolute", top: "1.5rem", right: "1.5rem", background: "transparent", border: "none", color: "var(--color-text-secondary)", cursor: "pointer" }}>
+              <X size={24} />
+            </button>
+            <h2 style={{ margin: "0 0 1.5rem 0", color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <AlertTriangle size={24} color="#eab308" /> Buscas Ativas
+            </h2>
+            
+            {showMissingDetails === "list" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+                {ackedMissing.map(m => (
+                  <div key={m.id} style={{ background: "var(--color-bg)", padding: "1rem", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)" }}>
+                    {m.photoUrl && (
+                      <img src={m.photoUrl} alt="Desaparecido" style={{ width: "100%", maxHeight: "200px", objectFit: "contain", borderRadius: "var(--radius-md)", marginBottom: "1rem", background: "white" }} />
+                    )}
+                    <p style={{ margin: 0, fontSize: "0.95rem", whiteSpace: "pre-wrap", color: "var(--color-text-primary)" }}>{m.description}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ background: "var(--color-bg)", padding: "1rem", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)" }}>
+                {showMissingDetails.photoUrl && (
+                  <img src={showMissingDetails.photoUrl} alt="Desaparecido" style={{ width: "100%", maxHeight: "250px", objectFit: "contain", borderRadius: "var(--radius-md)", marginBottom: "1rem", background: "white" }} />
+                )}
+                <p style={{ margin: 0, fontSize: "1rem", whiteSpace: "pre-wrap", color: "var(--color-text-primary)" }}>{showMissingDetails.description}</p>
+              </div>
+            )}
           </div>
         </div>
       )}
