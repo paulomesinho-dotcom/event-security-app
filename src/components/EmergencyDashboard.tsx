@@ -399,14 +399,18 @@ export default function EmergencyDashboard() {
                            {/* Local Evacuado */}
                            {isEvacuation && (
                              <td style={{ textAlign: "center" }}>
-                               <span style={{ 
-                                 display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.35rem 0.75rem", borderRadius: "var(--radius-full)", fontSize: "0.75rem", fontWeight: 600,
-                                 background: evacuated ? "rgba(16, 185, 129, 0.1)" : "rgba(245, 158, 11, 0.1)",
-                                 color: evacuated ? "var(--color-success)" : "#f59e0b"
-                               }}>
-                                 {evacuated ? <CheckCircle2 size={12}/> : <Circle size={12}/>}
-                                 {evacuated ? "Evacuado" : "Em Curso"}
-                               </span>
+                               {shiftForUser ? (
+                                 <span style={{ 
+                                   display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.35rem 0.75rem", borderRadius: "var(--radius-full)", fontSize: "0.75rem", fontWeight: 600,
+                                   background: evacuated ? "rgba(16, 185, 129, 0.1)" : "rgba(245, 158, 11, 0.1)",
+                                   color: evacuated ? "var(--color-success)" : "#f59e0b"
+                                 }}>
+                                   {evacuated ? <CheckCircle2 size={12}/> : <Circle size={12}/>}
+                                   {evacuated ? "Evacuado" : "Em Curso"}
+                                 </span>
+                               ) : (
+                                 <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)", fontWeight: 600 }}>N/A</span>
+                               )}
                              </td>
                            )}
 
