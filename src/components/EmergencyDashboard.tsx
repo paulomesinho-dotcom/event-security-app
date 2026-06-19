@@ -7,7 +7,7 @@ import { doc, setDoc, onSnapshot, collection, addDoc, getDocs, query, where, upd
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWorkplace } from "@/contexts/WorkplaceContext";
-import { AlertTriangle, CheckCircle2, Circle, Search, MapPin, Globe, Eye, Lock, ShieldAlert } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, Search, MapPin, Globe, Eye, Lock, ShieldAlert, Clock } from "lucide-react";
 
 type TabType = "global_evac" | "local_evac" | "missing";
 
