@@ -332,18 +332,24 @@ export default function VigiaDashboard() {
 
       {notifications.length > 0 && (
         <div style={{ marginBottom: "1.5rem", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "var(--shadow-md)" }}>
-          {notifications.map(n => (
+          {notifications.map(n => {
+            const timeStr = n.createdAt ? new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+            return (
             <div key={n.id} style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start", padding: "0.9rem 1rem", background: "#1e1b4b", borderLeft: "4px solid #818cf8", color: "white" }}>
               <Bell size={18} style={{ flexShrink: 0, marginTop: "0.1rem", color: "#a5b4fc" }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: 0, fontWeight: 700, fontSize: "0.7rem", color: "#a5b4fc", marginBottom: "0.2rem", letterSpacing: "0.05em" }}>MENSAGEM DO CAPITÃO</p>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.2rem" }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: "0.7rem", color: "#a5b4fc", letterSpacing: "0.05em" }}>MENSAGEM DO CAPITÃO</p>
+                  {timeStr && <span style={{ fontSize: "0.65rem", color: "rgba(165,180,252,0.8)" }}>{timeStr}</span>}
+                </div>
                 <p style={{ margin: 0, fontSize: "0.9rem", wordBreak: "break-word" }}>{n.message}</p>
               </div>
               <button onClick={() => markNotificationRead(n.id)} style={{ background: "rgba(255,255,255,0.1)", border: "none", cursor: "pointer", borderRadius: "50%", padding: "0.3rem", color: "white", display: "flex", alignItems: "center", flexShrink: 0 }}>
                 <X size={15} />
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

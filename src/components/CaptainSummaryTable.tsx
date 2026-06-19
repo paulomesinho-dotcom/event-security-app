@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, addDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, addDoc, orderBy } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWorkplace } from "@/contexts/WorkplaceContext";
-import { MapPin, Clock, CheckCircle2, PlayCircle, ShieldCheck, Bell, X } from "lucide-react";
+import { MapPin, Clock, CheckCircle2, PlayCircle, ShieldCheck, Bell, X, Check, CheckCheck } from "lucide-react";
 
 interface Shift {
   id: string;
@@ -22,6 +22,13 @@ interface UserMap {
   [key: string]: string;
 }
 
+interface Notification {
+  id: string;
+  message: string;
+  read: boolean;
+  createdAt: string;
+}
+
 export default function CaptainSummaryTable() {
   const { user } = useAuth();
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -33,6 +40,21 @@ export default function CaptainSummaryTable() {
   const [notifMessage, setNotifMessage] = useState("");
   const [selectedPersonId, setSelectedPersonId] = useState("");
   const [sendingNotif, setSendingNotif] = useState(false);
+  const [vigiaNotifications, setVigiaNotifications] = useState<Notification[]>([]);
+
+  useEffect(() => {
+    if (!selectedPersonId) return;
+    const q = query(
+      collection(db, "notifications"), 
+      where("vigiaId", "==", selectedPersonId),
+      orderBy("createdAt", "asc")
+    );
+    const unsubscribe = onSnapshot(q, (snap) => {
+      const notifs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
+      setVigiaNotifications(notifs);
+    });
+    return () => unsubscribe();
+  }, [selectedPersonId]);
 
   const handleSendNotification = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -267,6 +289,23 @@ export default function CaptainSummaryTable() {
             <p style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)", marginBottom: "1rem" }}>
               Escreva a mensagem que deseja enviar para o dispositivo do Vigia <strong>{users[selectedPersonId]}</strong>.
             </p>
+
+            {vigiaNotifications.length > 0 && (
+              <div style={{ marginBottom: "1rem", maxHeight: "180px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.5rem", padding: "0.5rem", background: "var(--color-bg)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)" }}>
+                {vigiaNotifications.map(n => {
+                  const timeStr = n.createdAt ? new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                  return (
+                    <div key={n.id} style={{ background: "var(--color-surface)", padding: "0.5rem 0.75rem", borderRadius: "var(--radius-md)", fontSize: "0.85rem", border: "1px solid var(--color-border)" }}>
+                      <p style={{ margin: "0 0 0.25rem", color: "var(--color-text-primary)" }}>{n.message}</p>
+                      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "0.25rem", fontSize: "0.7rem", color: "var(--color-text-tertiary)" }}>
+                        {timeStr}
+                        {n.read ? <CheckCheck size={14} color="#3b82f6" /> : <Check size={14} />}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             <form onSubmit={handleSendNotification} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               <div>
