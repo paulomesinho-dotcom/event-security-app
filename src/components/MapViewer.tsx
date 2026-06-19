@@ -216,12 +216,13 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
   }, []);
 
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%", display: "flex", flexDirection: "column", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", overflow: "hidden", background: "#f3f4f6" }}>
+    <div style={{ position: "relative", width: "100%", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", background: "#f3f4f6" }}>
       
       {/* Zoom Controls */}
-      <div style={{ position: "absolute", top: 10, right: 10, zIndex: 10, display: "flex", gap: "0.5rem" }}>
-         <button onClick={() => applyZoom(Math.max(0.1, scale - 0.2), window.innerWidth/2, window.innerHeight/2)} className="btn btn-secondary" style={{ padding: "0.2rem 0.5rem", boxShadow: "var(--shadow-md)" }}>-</button>
-         <button onClick={() => applyZoom(Math.min(scale + 0.2, 5), window.innerWidth/2, window.innerHeight/2)} className="btn btn-secondary" style={{ padding: "0.2rem 0.5rem", boxShadow: "var(--shadow-md)" }}>+</button>
+      <div style={{ position: "absolute", bottom: 20, right: 20, zIndex: 10, display: "flex", flexDirection: "column", gap: "2px", background: "rgba(255,255,255,0.7)", padding: "4px", borderRadius: "var(--radius-lg)", backdropFilter: "blur(4px)", border: "1px solid rgba(0,0,0,0.05)", boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}>
+         <button onClick={() => applyZoom(Math.min(scale + 0.2, 5), window.innerWidth/2, window.innerHeight/2)} style={{ width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "none", cursor: "pointer", color: "var(--color-text-secondary)", fontSize: "1.2rem", borderRadius: "var(--radius-md)", transition: "background 0.2s" }} onMouseOver={e => e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"} onMouseOut={e => e.currentTarget.style.backgroundColor = "transparent"}>+</button>
+         <div style={{ height: "1px", background: "rgba(0,0,0,0.05)", margin: "0 4px" }} />
+         <button onClick={() => applyZoom(Math.max(0.1, scale - 0.2), window.innerWidth/2, window.innerHeight/2)} style={{ width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "none", cursor: "pointer", color: "var(--color-text-secondary)", fontSize: "1.2rem", borderRadius: "var(--radius-md)", transition: "background 0.2s" }} onMouseOver={e => e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"} onMouseOut={e => e.currentTarget.style.backgroundColor = "transparent"}>-</button>
       </div>
 
       <div 

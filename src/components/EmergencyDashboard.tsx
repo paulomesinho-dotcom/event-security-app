@@ -1,15 +1,18 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
-import { doc, setDoc, onSnapshot, collection, addDoc, getDocs, query, where, updateDoc } from "firebase/firestore";
+import { doc, setDoc, onSnapshot, collection, addDoc, getDocs, query, where, updateDoc, orderBy, getDoc } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWorkplace } from "@/contexts/WorkplaceContext";
-import { AlertTriangle, CheckCircle2, Circle, Search, MapPin, Globe, Eye, Lock, ShieldAlert, Clock } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, Search, MapPin, Globe, Eye, Lock, ShieldAlert, Clock, PlayCircle, X, FileWarning } from "lucide-react";
+import dynamic from "next/dynamic";
 
-type TabType = "global_evac" | "local_evac" | "missing";
+const MapViewer = dynamic(() => import("@/components/MapViewer"), { ssr: false });
+
+type TabType = "global_evac" | "local_evac" | "missing" | "history";
 
 export default function EmergencyDashboard() {
   const { user } = useAuth();
@@ -27,8 +30,14 @@ export default function EmergencyDashboard() {
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [workplaceUsers, setWorkplaceUsers] = useState<any[]>([]);
   const [activeShifts, setActiveShifts] = useState<any[]>([]);
+  const [workplaces, setWorkplaces] = useState<any[]>([]);
+  const [history, setHistory] = useState<any[]>([]);
   const [emergencyIncidents, setEmergencyIncidents] = useState<any[]>([]);
+  const [allEmergencyIncidents, setAllEmergencyIncidents] = useState<any[]>([]);
   const [selectedIncident, setSelectedIncident] = useState<any>(null);
+  const [selectedMapShift, setSelectedMapShift] = useState<any>(null);
+  const [mapPlanUrl, setMapPlanUrl] = useState("");
+  const [mapLocator, setMapLocator] = useState<any>(null);
 
   const [missingDesc, setMissingDesc] = useState("");
   const [missingPhoto, setMissingPhoto] = useState<File | null>(null);
@@ -62,6 +71,16 @@ export default function EmergencyDashboard() {
       setAllUsers(users);
     });
 
+    const unsubWorkplaces = onSnapshot(collection(db, "workplaces"), (snap) => {
+       setWorkplaces(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    const qHistory = query(collection(db, "emergency_history"), orderBy("startTime", "desc"));
+    const unsubHistory = onSnapshot(qHistory, (snap) => {
+       const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+       setHistory(docs);
+    });
+
     const unsubShifts = onSnapshot(collection(db, "shifts"), (snap) => {
       // Filter active shifts and keep full data
       const actives = snap.docs.filter(d => d.data().status === "active").map(d => ({ id: d.id, ...d.data() }));
@@ -69,14 +88,11 @@ export default function EmergencyDashboard() {
     });
 
     const unsubIncidents = onSnapshot(collection(db, "incidents"), (snap) => {
-      const incs = snap.docs
+      const allIncs = snap.docs
         .filter(d => d.data().isEmergencyIncident === true)
-        .map(d => ({ id: d.id, ...d.data() }));
-      setEmergencyIncidents(incs);
-      
-      // Play a sound if there's a new incident (simple logic, checking length or using audio API if supported)
-      // Since it's hard to reliably play audio without interaction, we skip for now,
-      // but we could use a simple Audio object if we kept track of previous length
+        .map(d => ({ id: d.id, ...(d.data() as any) }));
+      setAllEmergencyIncidents(allIncs);
+      setEmergencyIncidents(allIncs.filter(inc => inc.status === "open"));
     });
 
     let unsubWorkplace = () => {};
@@ -94,6 +110,8 @@ export default function EmergencyDashboard() {
     return () => {
       unsubGlobal();
       unsubUsers();
+      unsubWorkplaces();
+      unsubHistory();
       unsubShifts();
       unsubIncidents();
       unsubWorkplace();
@@ -145,14 +163,36 @@ export default function EmergencyDashboard() {
      try {
         if (activeTab === "global_evac" || activeTab === "missing") {
            await setDoc(doc(db, "settings", "global"), { globalAlertAck: [], globalEvacAck: [] }, { merge: true });
+           const promises = emergencyIncidents.map(inc => updateDoc(doc(db, "incidents", inc.id), { status: "resolved" }));
+           await Promise.all(promises);
         } else if (activeWorkplaceId) {
            await setDoc(doc(db, "workplaces", activeWorkplaceId), { alertAck: [], evacAck: [] }, { merge: true });
+           const wpIncs = emergencyIncidents.filter(inc => inc.workplaceId === activeWorkplaceId);
+           const promises = wpIncs.map(inc => updateDoc(doc(db, "incidents", inc.id), { status: "resolved" }));
+           await Promise.all(promises);
         }
         alert("Ecrã limpo com sucesso.");
      } catch (err) {
         console.error(err);
         alert("Erro ao limpar ecrã.");
      }
+  };
+
+  const viewMap = async (shift: any) => {
+    try {
+      const planDoc = await getDoc(doc(db, "plans", shift.planId));
+      if (planDoc.exists()) setMapPlanUrl(planDoc.data().imageUrl);
+      else setMapPlanUrl("");
+      
+      const locDoc = await getDoc(doc(db, "locators", shift.locatorId));
+      if (locDoc.exists()) setMapLocator({ id: locDoc.id, ...locDoc.data() });
+      else setMapLocator(null);
+      
+      setSelectedMapShift(shift);
+    } catch(e) {
+      console.error(e);
+      alert("Erro ao carregar mapa.");
+    }
   };
 
   const toggleGlobal = async () => {
@@ -253,8 +293,8 @@ export default function EmergencyDashboard() {
     const evacCount = filtered.filter(u => evacAck.includes(u.id)).length;
 
     return (
-      <div style={{ marginTop: "2rem", background: "var(--color-bg)", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)" }}>
-         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1.5rem", borderBottom: "1px solid var(--color-border)" }}>
+      <div style={{ marginTop: "2rem" }}>
+         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1.5rem 0 0.5rem 0" }}>
             <div>
               <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600 }}>Acompanhamento em Tempo Real</h3>
               <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.85rem", color: "var(--color-text-secondary)" }}>
@@ -283,19 +323,20 @@ export default function EmergencyDashboard() {
          </div>
 
          <div style={{ overflowX: "auto" }}>
-            <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
+            <table className="drive-table">
                <thead>
-                  <tr style={{ background: "rgba(255,255,255,0.02)" }}>
-                     <th style={{ padding: "1rem 1.5rem", textAlign: "left", fontWeight: 600, color: "var(--color-text-secondary)" }}>Nome & Função</th>
-                     <th style={{ padding: "1rem 1.5rem", textAlign: "center", fontWeight: 600, color: "var(--color-text-secondary)" }}>Receção do Alerta</th>
-                     {isEvacuation && <th style={{ padding: "1rem 1.5rem", textAlign: "center", fontWeight: 600, color: "var(--color-text-secondary)" }}>Local Evacuado</th>}
-                     <th style={{ padding: "1rem 1.5rem", textAlign: "center", fontWeight: 600, color: "var(--color-text-secondary)" }}>Ocorrências</th>
+                  <tr>
+                     <th>Efetivo & Função</th>
+                     <th>Workplace & Posição</th>
+                     <th style={{ textAlign: "center" }}>Estado de Alerta</th>
+                     {isEvacuation && <th style={{ textAlign: "center" }}>Estado do Local</th>}
+                     <th style={{ textAlign: "right" }}>Ações / Ocorrências</th>
                   </tr>
                </thead>
                <tbody>
                   {filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={isEvacuation ? 4 : 3} style={{ padding: "3rem", textAlign: "center", color: "var(--color-text-secondary)" }}>
+                      <td colSpan={isEvacuation ? 5 : 4} style={{ textAlign: "center", color: "var(--color-text-secondary)", padding: "3rem" }}>
                         Nenhum efetivo em turno encontrado.
                       </td>
                     </tr>
@@ -308,47 +349,124 @@ export default function EmergencyDashboard() {
                       // Ideally we'd filter by time or specific emergency ID.
                       const userIncidents = emergencyIncidents.filter(inc => inc.vigiaId === u.id);
 
+                      const shiftForUser = activeShifts.find((s: any) => s.personId === u.id);
+                      const wpForShift = shiftForUser ? workplaces.find(w => w.planIds?.includes(shiftForUser.planId)) : null;
+                      const workplaceName = wpForShift ? wpForShift.name : (shiftForUser ? "Desconhecido" : "N/A");
+                      const locatorName = shiftForUser ? shiftForUser.locatorName : "N/A";
+                      const activeIncident = userIncidents.length > 0 ? userIncidents[userIncidents.length - 1] : null;
+                      const isExpanded = selectedIncident && activeIncident && selectedIncident.id === activeIncident.id;
+
                       return (
-                        <tr key={u.id} style={{ borderTop: "1px solid var(--color-border)" }}>
-                           <td style={{ padding: "1rem 1.5rem" }}>
+                        <React.Fragment key={u.id}>
+                        <tr style={{ background: isExpanded ? "var(--color-bg)" : "transparent" }}>
+                           {/* Nome & Função */}
+                           <td>
                              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                               <div style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--color-surface)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 600, fontSize: "0.8rem", color: "var(--color-text-secondary)", border: "1px solid var(--color-border)" }}>
+                               <div style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--color-primary)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", fontSize: "0.8rem" }}>
                                  {u.name.substring(0,2).toUpperCase()}
                                </div>
                                <div>
-                                 <div style={{ fontWeight: 500, color: "var(--color-text-primary)" }}>{u.name}</div>
+                                 <div style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{u.name}</div>
                                  <div style={{ fontSize: "0.75rem", textTransform: "capitalize", color: "var(--color-text-secondary)", marginTop: "0.15rem" }}>{u.role}</div>
                                </div>
                              </div>
                            </td>
-                           <td style={{ padding: "1rem 1.5rem", textAlign: "center" }}>
-                              {received 
-                                ? <span style={{ color: "var(--color-success)", display: "inline-flex", alignItems: "center", gap: "0.3rem", fontWeight: 500, background: "rgba(34, 197, 94, 0.1)", padding: "0.25rem 0.75rem", borderRadius: "var(--radius-full)" }}><CheckCircle2 size={16}/> Recebido</span> 
-                                : <span style={{ color: "var(--color-text-tertiary)", display: "inline-flex", alignItems: "center", gap: "0.3rem", background: "rgba(255, 255, 255, 0.05)", padding: "0.25rem 0.75rem", borderRadius: "var(--radius-full)" }}><Circle size={16}/> Aguarda</span>}
+
+                           {/* Workplace & Posicao */}
+                           <td>
+                             <div style={{ fontWeight: 500, color: "var(--color-text-primary)" }}>{workplaceName}</div>
+                             <div 
+                               onClick={() => shiftForUser && viewMap(shiftForUser)} 
+                               style={{ fontSize: "0.75rem", color: shiftForUser ? "var(--color-primary)" : "var(--color-text-secondary)", marginTop: "0.15rem", display: "flex", alignItems: "center", gap: "0.25rem", cursor: shiftForUser ? "pointer" : "default", textDecoration: shiftForUser ? "underline" : "none" }}
+                               title={shiftForUser ? "Ver no Mapa" : ""}
+                             >
+                               <MapPin size={12} /> {locatorName}
+                             </div>
                            </td>
+
+                           {/* Receção Alerta */}
+                           <td style={{ textAlign: "center" }}>
+                              <span style={{ 
+                                display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.35rem 0.75rem", borderRadius: "var(--radius-full)", fontSize: "0.75rem", fontWeight: 600,
+                                background: received ? "rgba(16, 185, 129, 0.1)" : "rgba(255, 255, 255, 0.05)",
+                                color: received ? "var(--color-success)" : "var(--color-text-tertiary)"
+                              }}>
+                                {received ? <CheckCircle2 size={12}/> : <Circle size={12}/>}
+                                {received ? "Recebido" : "Aguarda"}
+                              </span>
+                           </td>
+
+                           {/* Local Evacuado */}
                            {isEvacuation && (
-                             <td style={{ padding: "1rem 1.5rem", textAlign: "center" }}>
-                               {evacuated 
-                                 ? <span style={{ color: "var(--color-success)", display: "inline-flex", alignItems: "center", gap: "0.3rem", fontWeight: 500, background: "rgba(34, 197, 94, 0.1)", padding: "0.25rem 0.75rem", borderRadius: "var(--radius-full)" }}><CheckCircle2 size={16}/> Evacuado</span> 
-                                 : <span style={{ color: "var(--color-warning)", display: "inline-flex", alignItems: "center", gap: "0.3rem", background: "rgba(234, 179, 8, 0.1)", padding: "0.25rem 0.75rem", borderRadius: "var(--radius-full)" }}><Circle size={16}/> Em curso</span>}
+                             <td style={{ textAlign: "center" }}>
+                               <span style={{ 
+                                 display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.35rem 0.75rem", borderRadius: "var(--radius-full)", fontSize: "0.75rem", fontWeight: 600,
+                                 background: evacuated ? "rgba(16, 185, 129, 0.1)" : "rgba(245, 158, 11, 0.1)",
+                                 color: evacuated ? "var(--color-success)" : "#f59e0b"
+                               }}>
+                                 {evacuated ? <CheckCircle2 size={12}/> : <Circle size={12}/>}
+                                 {evacuated ? "Evacuado" : "Em Curso"}
+                               </span>
                              </td>
                            )}
-                           <td style={{ padding: "1rem 1.5rem", textAlign: "center" }}>
-                              {userIncidents.length > 0 ? (
-                                <button 
-                                  onClick={() => setSelectedIncident(userIncidents[userIncidents.length - 1])}
-                                  style={{ background: "var(--color-danger)", color: "white", border: "none", borderRadius: "50%", width: 32, height: 32, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", animation: "pulse 2s infinite" }}
-                                  title="Ver Ocorrência"
-                                >
-                                  <AlertTriangle size={16} />
-                                </button>
-                              ) : (
-                                <span style={{ color: "var(--color-text-tertiary)" }}>-</span>
-                              )}
+
+                           {/* Ações / Ocorrências */}
+                           <td>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "0.5rem" }}>
+                                {activeIncident && (
+                                  <button 
+                                    onClick={() => setSelectedIncident(isExpanded ? null : activeIncident)}
+                                    style={{ background: isExpanded ? "var(--color-surface)" : "var(--color-danger)", color: isExpanded ? "var(--color-text-primary)" : "white", border: isExpanded ? "1px solid var(--color-border)" : "none", borderRadius: "var(--radius-md)", padding: "0.4rem 0.75rem", display: "flex", alignItems: "center", gap: "0.35rem", cursor: "pointer", animation: isExpanded ? "none" : "pulse 2s infinite", fontSize: "0.75rem", fontWeight: 500 }}
+                                    title="Ver Ocorrência"
+                                  >
+                                    {isExpanded ? <X size={14} /> : <AlertTriangle size={14} />} 
+                                    {isExpanded ? "Fechar" : "Ocorrência"}
+                                  </button>
+                                )}
+                              </div>
                            </td>
                         </tr>
-                      );
-                    })
+                        {isExpanded && activeIncident && (
+                           <tr>
+                             <td colSpan={isEvacuation ? 5 : 4} style={{ padding: 0 }}>
+                                <div style={{ padding: "1.5rem", background: "var(--color-bg)", borderBottom: "1px solid var(--color-border)", animation: "fade-in 0.2s ease" }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--color-danger)", marginBottom: "1rem" }}>
+                                    <AlertTriangle size={18} /> <h4 style={{ margin: 0 }}>Detalhe da Ocorrência</h4>
+                                  </div>
+                                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
+                                    <div>
+                                      <span style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: "var(--color-text-tertiary)", marginBottom: "0.25rem", textTransform: "uppercase" }}>Data / Hora</span>
+                                      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontWeight: 600, color: "var(--color-text-primary)", fontSize: "0.9rem" }}><Clock size={14} color="var(--color-text-secondary)" /> {new Date(activeIncident.createdAt).toLocaleString("pt-PT")}</div>
+                                    </div>
+                                    <div>
+                                      <span style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: "var(--color-text-tertiary)", marginBottom: "0.25rem", textTransform: "uppercase" }}>Local / Posição</span>
+                                      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontWeight: 600, color: "var(--color-text-primary)", fontSize: "0.9rem" }}>
+                                        <MapPin size={14} color="var(--color-text-secondary)" /> 
+                                        {workplaces.find((w: any) => w.id === activeIncident.workplaceId)?.name ? `${workplaces.find((w: any) => w.id === activeIncident.workplaceId)?.name} - ` : ""}{activeIncident.locatorName}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <span style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: "0.5rem", textTransform: "uppercase" }}>Mensagem</span>
+                                    <p style={{ margin: 0, fontSize: "0.95rem", lineHeight: 1.5, color: "var(--color-text-primary)", whiteSpace: "pre-wrap" }}>
+                                      {activeIncident.message}
+                                    </p>
+                                  </div>
+                                  {activeIncident.photoUrl && (
+                                    <div style={{ marginTop: "1.5rem" }}>
+                                      <span style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: "0.5rem", textTransform: "uppercase" }}>Fotografia Anexa</span>
+                                      <a href={activeIncident.photoUrl} target="_blank" rel="noopener noreferrer" style={{ display: "block", borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--color-border)", width: "fit-content" }}>
+                                        <img src={activeIncident.photoUrl} alt="Ocorrência" style={{ maxHeight: "250px", objectFit: "contain", display: "block" }} />
+                                      </a>
+                                    </div>
+                                  )}
+                                </div>
+                             </td>
+                           </tr>
+                         )}
+                         </React.Fragment>
+                       );
+                     })
                   )}
                </tbody>
             </table>
@@ -363,15 +481,15 @@ export default function EmergencyDashboard() {
       <button 
         onClick={() => setActiveTab(id)}
         style={{
-          display: "flex", alignItems: "center", gap: "0.75rem",
-          padding: "1rem 1.5rem",
+          display: "flex", alignItems: "center", gap: "0.5rem",
+          padding: "0.6rem 1rem",
           background: isActive ? `${activeColor}15` : "transparent",
           color: isActive ? activeColor : "var(--color-text-secondary)",
           border: "none",
           borderBottom: isActive ? `3px solid ${activeColor}` : "3px solid transparent",
           cursor: "pointer",
           fontWeight: isActive ? 600 : 500,
-          fontSize: "1rem",
+          fontSize: "0.875rem",
           transition: "all 0.2s ease"
         }}
       >
@@ -393,9 +511,10 @@ export default function EmergencyDashboard() {
           {isSuperadmin && (
             <TabButton id="missing" icon={Eye} label="Pessoa Desaparecida" color="var(--color-text-secondary)" activeColor="#eab308" />
           )}
+          <TabButton id="history" icon={Clock} label="Histórico" color="var(--color-text-secondary)" activeColor="var(--color-primary)" />
         </div>
         <div style={{ display: "flex", gap: "1rem" }}>
-          {!globalEmergency && !workplaceEmergency && (
+          {!globalEmergency && !workplaceEmergency && activeTab !== "history" && (
              <button 
                onClick={clearDashboardManual}
                style={{ background: "transparent", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)", padding: "0.5rem 1rem", borderRadius: "var(--radius-md)", fontSize: "0.85rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.5rem" }}
@@ -403,23 +522,17 @@ export default function EmergencyDashboard() {
                Limpar Ecrã
              </button>
           )}
-          <button 
-             onClick={() => window.location.href = "/dashboard/emergency-history"}
-             style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)", padding: "0.5rem 1rem", borderRadius: "var(--radius-md)", fontSize: "0.85rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.5rem" }}
-          >
-             <Clock size={16} /> Ver Histórico
-          </button>
         </div>
       </div>
 
-      <div style={{ padding: "2rem", flex: 1, overflowY: "auto" }}>
+      <div style={{ padding: "1rem", flex: 1, overflowY: "auto" }}>
         
         {activeTab === "global_evac" && isSuperadmin && (
           <div className="animate-fade-in">
-             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "2rem" }}>
+             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
                <div style={{ maxWidth: "600px" }}>
-                 <h2 style={{ fontSize: "1.5rem", fontWeight: 700, margin: "0 0 0.5rem 0", color: "var(--color-text-primary)" }}>Protocolo de Evacuação Total</h2>
-                 <p style={{ color: "var(--color-text-secondary)", lineHeight: 1.6, margin: 0 }}>
+                 <h2 style={{ fontSize: "1.15rem", fontWeight: 700, margin: "0 0 0.25rem 0", color: "var(--color-text-primary)" }}>Protocolo de Evacuação Total</h2>
+                 <p style={{ color: "var(--color-text-secondary)", lineHeight: 1.4, margin: 0, fontSize: "0.85rem" }}>
                    A ativação deste protocolo irá bloquear todos os terminais do sistema com um ecrã vermelho intransponível. Exigirá confirmação de receção e posterior confirmação de evacuação de todas as equipas no terreno.
                  </p>
                </div>
@@ -437,9 +550,9 @@ export default function EmergencyDashboard() {
              </div>
 
              {globalEmergency && globalAlertType === "evacuation" && (
-               <div style={{ background: "rgba(239, 68, 68, 0.05)", borderLeft: "4px solid var(--color-danger)", padding: "1rem 1.5rem", borderRadius: "0 var(--radius-md) var(--radius-md) 0", marginBottom: "2rem", display: "flex", alignItems: "center", gap: "1rem" }}>
-                 <div style={{ background: "var(--color-danger)", width: 12, height: 12, borderRadius: "50%", animation: "pulse 2s infinite" }} />
-                 <span style={{ color: "var(--color-danger)", fontWeight: 600, letterSpacing: "0.05em" }}>EMERGÊNCIA GLOBAL EM CURSO</span>
+               <div style={{ background: "rgba(239, 68, 68, 0.05)", borderLeft: "4px solid var(--color-danger)", padding: "0.75rem 1rem", borderRadius: "0 var(--radius-md) var(--radius-md) 0", marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                 <div style={{ background: "var(--color-danger)", width: 10, height: 10, borderRadius: "50%", animation: "pulse 2s infinite" }} />
+                 <span style={{ color: "var(--color-danger)", fontWeight: 600, letterSpacing: "0.05em", fontSize: "0.85rem" }}>EMERGÊNCIA GLOBAL EM CURSO</span>
                </div>
              )}
 
@@ -457,12 +570,12 @@ export default function EmergencyDashboard() {
                 </div>
              ) : (
                 <>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "2rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
                     <div style={{ maxWidth: "600px" }}>
-                      <h2 style={{ fontSize: "1.5rem", fontWeight: 700, margin: "0 0 0.5rem 0", color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <h2 style={{ fontSize: "1.15rem", fontWeight: 700, margin: "0 0 0.25rem 0", color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
                          Evacuação: {activeWorkplace?.name}
                       </h2>
-                      <p style={{ color: "var(--color-text-secondary)", lineHeight: 1.6, margin: 0 }}>
+                      <p style={{ color: "var(--color-text-secondary)", lineHeight: 1.4, margin: 0, fontSize: "0.85rem" }}>
                         Este protocolo emite um alerta sonoro e visual apenas para os dispositivos dos seguranças alocados a este local.
                       </p>
                     </div>
@@ -486,9 +599,9 @@ export default function EmergencyDashboard() {
                   )}
 
                   {workplaceEmergency && (
-                    <div style={{ background: "rgba(249, 115, 22, 0.05)", borderLeft: "4px solid #f97316", padding: "1rem 1.5rem", borderRadius: "0 var(--radius-md) var(--radius-md) 0", marginBottom: "2rem", display: "flex", alignItems: "center", gap: "1rem" }}>
-                      <div style={{ background: "#f97316", width: 12, height: 12, borderRadius: "50%", animation: "pulse 2s infinite" }} />
-                      <span style={{ color: "#f97316", fontWeight: 600, letterSpacing: "0.05em" }}>ALERTA DE ZONA ATIVO</span>
+                    <div style={{ background: "rgba(249, 115, 22, 0.05)", borderLeft: "4px solid #f97316", padding: "0.75rem 1rem", borderRadius: "0 var(--radius-md) var(--radius-md) 0", marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                      <div style={{ background: "#f97316", width: 10, height: 10, borderRadius: "50%", animation: "pulse 2s infinite" }} />
+                      <span style={{ color: "#f97316", fontWeight: 600, letterSpacing: "0.05em", fontSize: "0.85rem" }}>ALERTA DE ZONA ATIVO</span>
                     </div>
                   )}
 
@@ -500,10 +613,10 @@ export default function EmergencyDashboard() {
 
         {activeTab === "missing" && isSuperadmin && (
           <div className="animate-fade-in">
-             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "2rem" }}>
+             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
                <div style={{ maxWidth: "600px" }}>
-                 <h2 style={{ fontSize: "1.5rem", fontWeight: 700, margin: "0 0 0.5rem 0", color: "var(--color-text-primary)" }}>Alerta de Pessoa Desaparecida</h2>
-                 <p style={{ color: "var(--color-text-secondary)", lineHeight: 1.6, margin: 0 }}>
+                 <h2 style={{ fontSize: "1.15rem", fontWeight: 700, margin: "0 0 0.25rem 0", color: "var(--color-text-primary)" }}>Alerta de Pessoa Desaparecida</h2>
+                 <p style={{ color: "var(--color-text-secondary)", lineHeight: 1.4, margin: 0, fontSize: "0.85rem" }}>
                    Dispara um alerta global para todas as equipas focarem a sua atenção na procura. Adicione o máximo de detalhes possível.
                  </p>
                </div>
@@ -517,9 +630,9 @@ export default function EmergencyDashboard() {
 
              {globalEmergency && globalAlertType === "missing_person" ? (
                 <>
-                  <div style={{ background: "rgba(234, 179, 8, 0.05)", borderLeft: "4px solid #eab308", padding: "1rem 1.5rem", borderRadius: "0 var(--radius-md) var(--radius-md) 0", marginBottom: "2rem", display: "flex", alignItems: "center", gap: "1rem" }}>
-                    <div style={{ background: "#eab308", width: 12, height: 12, borderRadius: "50%", animation: "pulse 2s infinite" }} />
-                    <span style={{ color: "#eab308", fontWeight: 600, letterSpacing: "0.05em" }}>BUSCA ATIVA EM CURSO</span>
+                  <div style={{ background: "rgba(234, 179, 8, 0.05)", borderLeft: "4px solid #eab308", padding: "0.75rem 1rem", borderRadius: "0 var(--radius-md) var(--radius-md) 0", marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    <div style={{ background: "#eab308", width: 10, height: 10, borderRadius: "50%", animation: "pulse 2s infinite" }} />
+                    <span style={{ color: "#eab308", fontWeight: 600, letterSpacing: "0.05em", fontSize: "0.85rem" }}>BUSCA ATIVA EM CURSO</span>
                   </div>
                   {renderUserTable(allUsers, globalAlertAck, globalEvacAck, false, null)}
                 </>
@@ -565,47 +678,136 @@ export default function EmergencyDashboard() {
                 </div>
              )}
           </div>
+         )}
+
+         {activeTab === "history" && (
+          <div className="animate-fade-in">
+             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+                <h2 style={{ fontSize: "1.15rem", fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--color-text-primary)" }}>
+                   Histórico de Emergências
+                </h2>
+             </div>
+             
+             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                {history.length === 0 ? (
+                   <div style={{ textAlign: "center", padding: "4rem", background: "var(--color-surface)", borderRadius: "var(--radius-lg)", border: "1px dashed var(--color-border)" }}>
+                     <ShieldAlert size={48} color="var(--color-text-tertiary)" style={{ margin: "0 auto 1rem auto" }} />
+                     <h3 style={{ margin: "0 0 0.5rem 0", color: "var(--color-text-secondary)" }}>Nenhum registo encontrado</h3>
+                   </div>
+                ) : (
+                    history.map((item) => {
+                      const wp = workplaces.find(w => w.id === item.workplaceId);
+                      const isGlobal = item.type === "global";
+                      
+                      const startDate = item.startTime ? new Date(item.startTime).toLocaleString("pt-PT") : "--";
+                      const endDate = item.endTime ? new Date(item.endTime).toLocaleString("pt-PT") : "--";
+                      
+                      const itemIncidents = allEmergencyIncidents.filter(inc => {
+                        const incTime = new Date(inc.createdAt).getTime();
+                        const sTime = new Date(item.startTime).getTime();
+                        const eTime = item.endTime ? new Date(item.endTime).getTime() : Infinity;
+                        
+                        if (incTime < sTime || incTime > eTime) return false;
+                        if (!isGlobal && inc.workplaceId !== item.workplaceId) return false;
+                        return true;
+                      });
+
+                      return (
+                         <div key={item.id} style={{ background: "var(--color-bg)", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)", overflow: "hidden", padding: "1.5rem" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: itemIncidents.length > 0 ? "1.5rem" : 0 }}>
+                               <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: isGlobal ? "rgba(239, 68, 68, 0.1)" : "rgba(249, 115, 22, 0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                     {isGlobal ? <Globe size={20} color="var(--color-danger)" /> : <MapPin size={20} color="#f97316" />}
+                                  </div>
+                                  <div>
+                                     <h3 style={{ margin: "0 0 0.25rem 0", fontSize: "1.1rem" }}>
+                                        {isGlobal ? "Alerta Global" : `Alerta Local: ${wp?.name || "Local Desconhecido"}`}
+                                     </h3>
+                                     <div style={{ fontSize: "0.85rem", color: "var(--color-text-secondary)", display: "flex", gap: "1rem" }}>
+                                        <span><strong>Tipo:</strong> {item.alertType === "evacuation" ? "Evacuação" : "Pessoa Desaparecida"}</span>
+                                        <span><strong>Estado:</strong> {item.status === "active" ? "Em Curso" : "Fechado"}</span>
+                                     </div>
+                                  </div>
+                               </div>
+                               <div style={{ textAlign: "right" }}>
+                                  <div style={{ fontSize: "0.85rem", color: "var(--color-text-secondary)", marginBottom: "0.25rem" }}>
+                                    <span style={{ color: "var(--color-text-tertiary)", textTransform: "uppercase", fontSize: "0.7rem", fontWeight: 600, marginRight: "0.5rem" }}>Início</span> 
+                                    {startDate}
+                                  </div>
+                                  <div style={{ fontSize: "0.85rem", color: "var(--color-text-secondary)" }}>
+                                    <span style={{ color: "var(--color-text-tertiary)", textTransform: "uppercase", fontSize: "0.7rem", fontWeight: 600, marginRight: "0.5rem" }}>Fim</span> 
+                                    {endDate}
+                                  </div>
+                               </div>
+                            </div>
+
+                            {itemIncidents.length > 0 && (
+                               <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "1.5rem" }}>
+                                  <h4 style={{ margin: "0 0 1rem 0", fontSize: "0.95rem", color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                     <FileWarning size={16} /> Ocorrências Registadas ({itemIncidents.length})
+                                  </h4>
+                                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                                     {itemIncidents.map(inc => {
+                                        const incWp = workplaces.find((w: any) => w.id === inc.workplaceId);
+                                        const locText = incWp ? `${incWp.name} - ${inc.locatorName}` : inc.locatorName;
+                                        return (
+                                           <div key={inc.id} style={{ background: "var(--color-surface)", borderRadius: "var(--radius-md)", padding: "1rem", border: "1px solid var(--color-border)" }}>
+                                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+                                                 <span style={{ fontWeight: 600, fontSize: "0.9rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                                                    <MapPin size={14} color="var(--color-text-secondary)" /> {locText}
+                                                 </span>
+                                                 <span style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                                                    <Clock size={12} /> {new Date(inc.createdAt).toLocaleString("pt-PT")}
+                                                 </span>
+                                              </div>
+                                              <p style={{ margin: "0 0 1rem 0", fontSize: "0.9rem", color: "var(--color-text-secondary)" }}>{inc.message}</p>
+                                              
+                                              {inc.photoUrl && (
+                                                 <a href={inc.photoUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--color-border)" }}>
+                                                    <img src={inc.photoUrl} alt="Foto da ocorrência" style={{ height: "100px", objectFit: "contain", display: "block" }} />
+                                                 </a>
+                                              )}
+                                              <div style={{ marginTop: "0.5rem", fontSize: "0.8rem", color: "var(--color-text-tertiary)" }}>
+                                                 Reportado por: {inc.vigiaName || "Vigia"}
+                                              </div>
+                                           </div>
+                                        );
+                                     })}
+                                  </div>
+                               </div>
+                            )}
+                         </div>
+                      );
+                   })
+                )}
+             </div>
+          </div>
         )}
       </div>
 
-      {/* Incident Modal */}
-      {selectedIncident && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-          <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "600px", padding: "2rem", position: "relative" }}>
-            <button onClick={() => setSelectedIncident(null)} style={{ position: "absolute", top: "1.5rem", right: "1.5rem", background: "transparent", border: "none", color: "var(--color-text-secondary)", cursor: "pointer" }}>
-               ✕
-            </button>
-            <h2 style={{ margin: "0 0 0.5rem 0", color: "var(--color-danger)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <AlertTriangle size={24} /> Detalhes da Ocorrência
-            </h2>
-            <div style={{ color: "var(--color-text-secondary)", marginBottom: "1.5rem", fontSize: "0.9rem", display: "flex", gap: "1rem" }}>
-               <span>Reportado por: <strong>{selectedIncident.vigiaName}</strong></span>
-               <span>Local: <strong>{selectedIncident.locatorName}</strong></span>
-            </div>
+      {/* Modal removed. Incidents now expand inline in the table. */}
 
-            <div style={{ background: "var(--color-bg)", padding: "1.5rem", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)", marginBottom: "1.5rem" }}>
-               <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", textTransform: "uppercase", color: "var(--color-text-secondary)", letterSpacing: "0.05em" }}>Descrição</h4>
-               <p style={{ margin: 0, fontSize: "1.1rem", whiteSpace: "pre-wrap", color: "var(--color-text-primary)" }}>
-                 {selectedIncident.message}
-               </p>
-            </div>
-
-            {selectedIncident.photoUrl && (
-              <div style={{ marginBottom: "2rem" }}>
-                <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", textTransform: "uppercase", color: "var(--color-text-secondary)", letterSpacing: "0.05em" }}>Evidência Fotográfica</h4>
-                <img src={selectedIncident.photoUrl} alt="Ocorrência" style={{ width: "100%", maxHeight: "300px", objectFit: "contain", borderRadius: "var(--radius-md)", background: "var(--color-bg)", border: "1px solid var(--color-border)" }} />
-              </div>
-            )}
-
+      {/* Map Modal */}
+      {selectedMapShift && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.85)", zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", animation: "fade-in 0.2s ease", background: "#e5e7eb" }}>
             <button 
-              onClick={() => setSelectedIncident(null)} 
-              style={{
-                width: "100%", padding: "1rem", background: "var(--color-surface)", color: "var(--color-text-primary)",
-                border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", fontWeight: 600, fontSize: "1rem", cursor: "pointer"
-              }}
+              onClick={() => setSelectedMapShift(null)} 
+              style={{ position: "absolute", top: "1rem", right: "1rem", zIndex: 10, background: "var(--color-surface)", border: "none", color: "var(--color-text-primary)", cursor: "pointer", display: "flex", padding: "0.75rem", borderRadius: "50%", boxShadow: "var(--shadow-lg)" }}
             >
-              FECHAR
+               <X size={24} />
             </button>
+            {mapPlanUrl ? (
+               <MapViewer 
+                  imageUrl={mapPlanUrl}
+                  locators={mapLocator ? [mapLocator] : []}
+               />
+            ) : (
+               <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-secondary)", flexDirection: "column", gap: "1rem" }}>
+                 <MapPin size={32} opacity={0.5} />
+                 <p>A carregar mapa...</p>
+               </div>
+            )}
           </div>
         </div>
       )}

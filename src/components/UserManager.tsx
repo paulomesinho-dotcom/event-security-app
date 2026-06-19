@@ -73,30 +73,30 @@ export default function UserManager() {
       </h3>
       
       <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--color-surface)", borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--color-border)" }}>
-          <thead style={{ background: "var(--color-bg)", borderBottom: "1px solid var(--color-border)", textAlign: "left" }}>
+        <table className="drive-table">
+          <thead>
             <tr>
-              <th style={{ padding: "0.5rem 0.75rem", fontWeight: 600, fontSize: "0.75rem", color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Utilizador</th>
-              <th style={{ padding: "0.5rem 0.75rem", fontWeight: 600, fontSize: "0.75rem", color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Detalhes</th>
-              <th style={{ padding: "0.5rem 0.75rem", fontWeight: 600, fontSize: "0.75rem", color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Cargo</th>
-              <th style={{ padding: "0.5rem 0.75rem", fontWeight: 600, fontSize: "0.75rem", color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Ações</th>
+              <th>Utilizador</th>
+              <th>Detalhes</th>
+              <th>Cargo</th>
+              <th>Ações</th>
             </tr>
           </thead>
           <tbody>
             {users.map(u => (
-              <tr key={u.id} style={{ borderBottom: "1px solid var(--color-border)" }}>
+              <tr key={u.id}>
                 
-                <td style={{ padding: "0.5rem 0.75rem", verticalAlign: "middle" }}>
+                <td>
                   <div style={{ fontWeight: 600, color: "var(--color-text-primary)", fontSize: "0.875rem" }}>{u.name}</div>
                   <div style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)" }}>{u.email}</div>
                 </td>
                 
-                <td style={{ padding: "0.5rem 0.75rem", verticalAlign: "middle" }}>
+                <td>
                   <div style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)" }}>{u.contact || "Sem contacto"}</div>
                   <div style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)" }}>{u.congregation || "S/ Congregação"}</div>
                 </td>
                 
-                <td style={{ padding: "0.5rem 0.75rem", verticalAlign: "middle" }}>
+                <td>
                   <span style={{ 
                     fontSize: "0.7rem", 
                     padding: "0.2rem 0.4rem", 
@@ -110,7 +110,7 @@ export default function UserManager() {
                   </span>
                 </td>
                 
-                <td style={{ padding: "0.5rem 0.75rem", verticalAlign: "middle" }}>
+                <td>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                     <select 
                       className="input" 

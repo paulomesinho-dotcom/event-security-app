@@ -166,15 +166,15 @@ export default function CaptainSummaryTable() {
           <p style={{ color: "var(--color-text-secondary)" }}>Ainda não existem turnos atribuídos na sua zona.</p>
         </div>
       ) : (
-        <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)", overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.875rem" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table className="drive-table">
             <thead>
-              <tr style={{ background: "var(--color-bg)", borderBottom: "1px solid var(--color-border)" }}>
-                <th style={{ padding: "1rem 1.5rem", color: "var(--color-text-secondary)", fontWeight: 600 }}>Posição do Pino</th>
-                <th style={{ padding: "1rem 1.5rem", color: "var(--color-text-secondary)", fontWeight: 600 }}>Turno</th>
-                <th style={{ padding: "1rem 1.5rem", color: "var(--color-text-secondary)", fontWeight: 600 }}>Vigia Destacado</th>
-                <th style={{ padding: "1rem 1.5rem", color: "var(--color-text-secondary)", fontWeight: 600, textAlign: "right" }}>Estado Atual</th>
-                <th style={{ padding: "1rem 1.5rem", color: "var(--color-text-secondary)", fontWeight: 600, textAlign: "right" }}>Ações</th>
+              <tr>
+                <th>Posição do Pino</th>
+                <th>Turno</th>
+                <th>Vigia Destacado</th>
+                <th style={{ textAlign: "right" }}>Estado Atual</th>
+                <th style={{ textAlign: "right" }}>Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -182,10 +182,10 @@ export default function CaptainSummaryTable() {
                 const vigiaName = users[shift.personId] || "Desconhecido";
                 
                 return (
-                  <tr key={shift.id} style={{ borderBottom: "1px solid var(--color-border)", transition: "background-color 0.2s" }} onMouseEnter={e => e.currentTarget.style.backgroundColor = "var(--color-bg)"} onMouseLeave={e => e.currentTarget.style.backgroundColor = "transparent"}>
+                  <tr key={shift.id}>
                     
                     {/* Posição */}
-                    <td style={{ padding: "1rem 1.5rem" }}>
+                    <td>
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                          <MapPin size={16} color="var(--color-text-tertiary)" />
                          <span style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{shift.locatorName}</span>
@@ -193,7 +193,7 @@ export default function CaptainSummaryTable() {
                     </td>
 
                     {/* Turno */}
-                    <td style={{ padding: "1rem 1.5rem" }}>
+                    <td>
                       <div style={{ fontWeight: 500, color: "var(--color-text-primary)", marginBottom: "0.25rem" }}>{shift.name}</div>
                       <div style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "0.25rem" }}>
                         <Clock size={12} /> {shift.days} • {shift.time}
@@ -201,7 +201,7 @@ export default function CaptainSummaryTable() {
                     </td>
 
                     {/* Vigia */}
-                    <td style={{ padding: "1rem 1.5rem" }}>
+                    <td>
                       <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
                          <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: "var(--color-primary)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", fontSize: "0.75rem" }}>
                             {vigiaName.charAt(0).toUpperCase()}
@@ -211,7 +211,7 @@ export default function CaptainSummaryTable() {
                     </td>
 
                     {/* Estado */}
-                    <td style={{ padding: "1rem 1.5rem", textAlign: "right" }}>
+                    <td style={{ textAlign: "right" }}>
                       <span style={{ 
                         display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.35rem 0.75rem", borderRadius: "var(--radius-full)", fontSize: "0.75rem", fontWeight: 600,
                         background: shift.status === "active" ? "rgba(16, 185, 129, 0.1)" : shift.status === "completed" ? "var(--color-bg)" : "rgba(245, 158, 11, 0.1)",
@@ -225,7 +225,7 @@ export default function CaptainSummaryTable() {
                     </td>
 
                     {/* Ações */}
-                    <td style={{ padding: "1rem 1.5rem", textAlign: "right" }}>
+                    <td style={{ textAlign: "right" }}>
                       <button 
                          onClick={() => {
                            setSelectedPersonId(shift.personId);

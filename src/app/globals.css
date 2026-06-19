@@ -218,6 +218,39 @@ input, textarea, select {
   border: 1px solid var(--color-border);
 }
 
+/* Google Drive Style Table */
+.drive-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.875rem; /* 14px */
+  color: #3c4043;
+  background: var(--color-surface);
+}
+.drive-table thead tr {
+  border-bottom: 1px solid var(--color-border);
+}
+.drive-table th {
+  padding: 0.6rem 1rem;
+  font-weight: 500;
+  color: #5f6368;
+  font-size: 0.875rem;
+  background-color: var(--color-surface);
+  white-space: nowrap;
+}
+.drive-table tbody tr {
+  border-bottom: 1px solid var(--color-border);
+  transition: background-color 0.15s;
+  background-color: var(--color-surface);
+}
+.drive-table tbody tr:hover {
+  background-color: #f5f5f5;
+}
+.drive-table td {
+  padding: 0.6rem 1rem;
+  vertical-align: middle;
+}
+
 /* Animations */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }

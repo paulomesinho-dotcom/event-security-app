@@ -63,14 +63,13 @@ export default function EmergencyBanner() {
   const otherLocalEmergencies = localEmergencies.filter(e => e.id !== activeWorkplaceId);
 
   // Full Screen Block logic:
-  // - Global or Missing Person -> Always block
-  // - Local (my workplace) AND has active shift -> Block
-  const isBlockingEmergency = globalEmergency || (myLocalEmergency && hasActiveShift);
+  // - Global or Missing Person -> Block ONLY if hasActiveShift
+  // - Local (my workplace) -> Block ONLY if hasActiveShift
+  const isBlockingEmergency = (globalEmergency || myLocalEmergency) && hasActiveShift;
   
   // Non-blocking notifications logic:
-  // - Local (my workplace) but NO active shift
-  // - Local (other workplace)
-  const hasNonBlockingNotifications = (!globalEmergency && !isBlockingEmergency) && localEmergencies.length > 0;
+  // - An emergency exists (global or local) but I don't have an active shift
+  const hasNonBlockingNotifications = !isBlockingEmergency && (globalEmergency || localEmergencies.length > 0);
 
   if (!isBlockingEmergency && !hasNonBlockingNotifications) return null;
 
@@ -181,60 +180,66 @@ export default function EmergencyBanner() {
     return (
       <div style={{
         position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-        background: isMissingPerson ? "rgba(234, 179, 8, 0.85)" : "rgba(220, 38, 38, 0.85)", 
-        backdropFilter: "blur(12px)",
-        color: isMissingPerson ? "#000" : "white",
+        background: "rgba(15, 23, 42, 0.85)", 
+        backdropFilter: "blur(8px)",
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-        zIndex: 10000, padding: "2rem", textAlign: "center"
+        zIndex: 10000, padding: "1.5rem", textAlign: "center"
       }}>
         
         <div style={{
-          background: isMissingPerson ? "#fef08a" : "#fff",
-          color: isMissingPerson ? "#854d0e" : "#dc2626",
-          padding: "3rem 2rem",
+          background: "var(--color-surface)",
+          color: "var(--color-text-primary)",
           borderRadius: "var(--radius-2xl)",
           boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
-          maxWidth: "500px",
+          maxWidth: "450px",
           width: "100%",
-          display: "flex", flexDirection: "column", alignItems: "center",
+          overflow: "hidden",
           animation: "scaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)"
         }}>
-          <ShieldAlert size={64} style={{ marginBottom: "1rem", animation: "pulse 2s infinite" }} />
           
-          <h1 style={{ fontSize: "2rem", fontWeight: 900, textTransform: "uppercase", marginBottom: "0.5rem", letterSpacing: "0.05em", lineHeight: 1.1 }}>
-            {isMissingPerson ? "PESSOA DESAPARECIDA" : globalEmergency ? "EVACUAÇÃO GERAL" : "EVACUAÇÃO DE ZONA"}
-          </h1>
+          <div style={{ 
+            background: isMissingPerson ? "#eab308" : "#dc2626", 
+            padding: "2.5rem 2rem", display: "flex", flexDirection: "column", alignItems: "center",
+            color: "white" 
+          }}>
+            <ShieldAlert size={56} style={{ marginBottom: "1rem", animation: "pulse 2s infinite" }} />
+            <h1 style={{ fontSize: "1.75rem", fontWeight: 900, textTransform: "uppercase", margin: 0, letterSpacing: "0.05em", lineHeight: 1.1 }}>
+              {isMissingPerson ? "PESSOA DESAPARECIDA" : globalEmergency ? "EVACUAÇÃO GERAL" : "EVACUAÇÃO DE ZONA"}
+            </h1>
+          </div>
 
-          {isMissingPerson && globalAlertDetails && (
-            <div style={{ background: "rgba(0,0,0,0.05)", padding: "1rem", borderRadius: "var(--radius-lg)", width: "100%", margin: "1.5rem 0" }}>
-              {globalAlertDetails.photoUrl && (
-                 <img src={globalAlertDetails.photoUrl} alt="Desaparecido" style={{ width: "100%", maxHeight: "300px", objectFit: "contain", borderRadius: "var(--radius-md)", marginBottom: "1rem", background: "white" }} />
-              )}
-              <p style={{ fontSize: "1.1rem", fontWeight: 600, margin: 0, textAlign: "left", whiteSpace: "pre-wrap" }}>
-                {globalAlertDetails.description}
+          <div style={{ padding: "2rem" }}>
+            {isMissingPerson && globalAlertDetails && (
+              <div style={{ background: "var(--color-bg)", padding: "1rem", borderRadius: "var(--radius-lg)", width: "100%", marginBottom: "1.5rem" }}>
+                {globalAlertDetails.photoUrl && (
+                   <img src={globalAlertDetails.photoUrl} alt="Desaparecido" style={{ width: "100%", maxHeight: "250px", objectFit: "contain", borderRadius: "var(--radius-md)", marginBottom: "1rem", background: "white" }} />
+                )}
+                <p style={{ fontSize: "1rem", fontWeight: 500, margin: 0, textAlign: "left", whiteSpace: "pre-wrap", color: "var(--color-text-primary)" }}>
+                  {globalAlertDetails.description}
+                </p>
+              </div>
+            )}
+
+            {!isMissingPerson && (
+              <p style={{ fontSize: "1.1rem", fontWeight: 500, color: "var(--color-text-secondary)", marginTop: 0, marginBottom: "2rem" }}>
+                Por favor, proceda de imediato de acordo com o protocolo de segurança definido.
               </p>
-            </div>
-          )}
+            )}
 
-          {!isMissingPerson && (
-            <p style={{ fontSize: "1.2rem", fontWeight: 600, opacity: 0.9, marginTop: "1rem" }}>
-              PROCEDA IMEDIATAMENTE DE ACORDO COM O PROTOCOLO DE SEGURANÇA.
-            </p>
-          )}
-
-          <button 
-            onClick={handleAcknowledge}
-            style={{ 
-              marginTop: "2.5rem", padding: "1.25rem 2rem", fontSize: "1.25rem", fontWeight: 800,
-              background: isMissingPerson ? "#a16207" : "#dc2626", color: "white", border: "none", borderRadius: "var(--radius-xl)",
-              cursor: "pointer", width: "100%", transition: "transform 0.2s",
-              boxShadow: isMissingPerson ? "0 10px 15px -3px rgba(161, 98, 7, 0.4)" : "0 10px 15px -3px rgba(220, 38, 38, 0.4)"
-            }}
-            onMouseOver={e => e.currentTarget.style.transform = "scale(1.02)"}
-            onMouseOut={e => e.currentTarget.style.transform = "scale(1)"}
-          >
-            CONFIRMAR RECEÇÃO
-          </button>
+            <button 
+              onClick={handleAcknowledge}
+              style={{ 
+                padding: "1rem 2rem", fontSize: "1.15rem", fontWeight: 700,
+                background: isMissingPerson ? "#ca8a04" : "#dc2626", color: "white", border: "none", borderRadius: "var(--radius-xl)",
+                cursor: "pointer", width: "100%", transition: "transform 0.2s",
+                boxShadow: isMissingPerson ? "0 4px 14px 0 rgba(202, 138, 4, 0.39)" : "0 4px 14px 0 rgba(220, 38, 38, 0.39)"
+              }}
+              onMouseOver={e => e.currentTarget.style.transform = "scale(1.02)"}
+              onMouseOut={e => e.currentTarget.style.transform = "scale(1)"}
+            >
+              CONFIRMAR RECEÇÃO
+            </button>
+          </div>
         </div>
       </div>
     );
