@@ -760,6 +760,7 @@ export default function VigiaDashboard() {
           )}
         </div>
       )}
+    </div>
 
       {showIncidentModal && (
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
@@ -1102,7 +1103,6 @@ export default function VigiaDashboard() {
           50% { box-shadow: 0 0 0 8px rgba(168,85,247,0.0); }
         }
       `}</style>
-    </div>
 
     {/* BOTTOM NAVIGATION BAR — flex sibling of scrollable content */}
     <div className="vigia-app-bottom-bar">

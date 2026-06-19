@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { collection, query, onSnapshot, doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import MapModal from "./MapModal";
 import { UserX, Clock, MapPin, CheckCircle2, X, AlertTriangle, Eye, Navigation, Search } from "lucide-react";
 
 export default function SuspectManager() {
@@ -10,6 +11,7 @@ export default function SuspectManager() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"ativos" | "historico">("ativos");
   const [selectedSuspect, setSelectedSuspect] = useState<any | null>(null);
+  const [mapModalData, setMapModalData] = useState<any>(null);
 
   useEffect(() => {
     const q = query(collection(db, "suspicious_persons"));
@@ -103,7 +105,7 @@ export default function SuspectManager() {
                       </div>
                       <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.75rem", color: "var(--color-text-secondary)" }}>
                         <span>{sus.initialLocation}</span>
-                        <span>·</span>
+                        <span>Â·</span>
                         <span>{new Date(sus.createdAt).toLocaleTimeString("pt-PT", {hour: "2-digit", minute:"2-digit"})}</span>
                       </div>
                     </div>
@@ -130,7 +132,7 @@ export default function SuspectManager() {
                     {selectedSuspect.status === "active" ? <AlertTriangle size={16} color="#a855f7" /> : (selectedSuspect.status === "resolved" ? <CheckCircle2 size={16} color="#10b981" /> : <X size={16} color="#ef4444" />)}
                     <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, lineHeight: 1.3, color: "var(--color-text-primary)" }}>{selectedSuspect.description}</h3>
                   </div>
-                  <span style={{ fontSize: "0.8rem", color: "#a855f7", fontWeight: 600 }}>Por {selectedSuspect.vigiaName} · {new Date(selectedSuspect.createdAt).toLocaleTimeString("pt-PT", {hour:"2-digit", minute:"2-digit"})}</span>
+                  <span style={{ fontSize: "0.8rem", color: "#a855f7", fontWeight: 600 }}>Por {selectedSuspect.vigiaName} Â· {new Date(selectedSuspect.createdAt).toLocaleTimeString("pt-PT", {hour:"2-digit", minute:"2-digit"})}</span>
                 </div>
               </div>
 
@@ -141,12 +143,22 @@ export default function SuspectManager() {
                 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", fontSize: "0.875rem", marginBottom: "1.5rem" }}>
                   <div style={{ background: "var(--color-bg)", padding: "0.6rem 0.8rem", borderRadius: "var(--radius-md)", borderLeft: "3px solid #a855f7" }}>
-                    <strong style={{ color: "#a855f7", display: "block", marginBottom: "0.2rem", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>📍 Local Inicial</strong>
+                    <strong style={{ color: "#a855f7", display: "block", marginBottom: "0.2rem", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>ðŸ“ Local Inicial</strong>
                     {selectedSuspect.initialLocation}
+                    {selectedSuspect.planImageUrl && selectedSuspect.pinX && selectedSuspect.pinY && (
+                      <div style={{ marginTop: "0.4rem" }}>
+                        <button 
+                          onClick={() => setMapModalData({ planImageUrl: selectedSuspect.planImageUrl, pinX: selectedSuspect.pinX, pinY: selectedSuspect.pinY, title: selectedSuspect.initialLocation })} 
+                          style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.75rem", color: "#a855f7", textDecoration: "underline", background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
+                        >
+                          <MapPin size={12} /> Ver Planta Inicial
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div style={{ background: "var(--color-bg)", padding: "0.6rem 0.8rem", borderRadius: "var(--radius-md)", borderLeft: "3px solid rgba(168,85,247,0.4)" }}>
-                    <strong style={{ color: "var(--color-text-secondary)", display: "block", marginBottom: "0.2rem", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>🧭 Direção</strong>
-                    {selectedSuspect.direction || "—"}
+                    <strong style={{ color: "var(--color-text-secondary)", display: "block", marginBottom: "0.2rem", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>ðŸ§­ Direção</strong>
+                    {selectedSuspect.direction || "â€”"}
                   </div>
                 </div>
                 
@@ -189,6 +201,21 @@ export default function SuspectManager() {
           )}
         </div>
       </div>
+      
+      {mapModalData && (
+        <MapModal
+          data={{
+            title: mapModalData.title,
+            planImageUrl: mapModalData.planImageUrl,
+            pinX: mapModalData.pinX,
+            pinY: mapModalData.pinY
+          }}
+          onClose={() => setMapModalData(null)}
+        />
+      )}
     </div>
   );
 }
+
+
+

@@ -70,8 +70,9 @@ body {
   display: flex;
   flex-direction: column;
   height: 100dvh; /* Dynamic Viewport Height - respects mobile browser chrome */
-  overflow: hidden;
-  background: var(--color-bg);
+    overflow: hidden;
+    background: var(--color-bg);
+    position: relative;
 }
 
 .vigia-app-nav {
@@ -334,3 +335,5 @@ input, textarea, select {
     padding-top: env(safe-area-inset-top);
   }
 }
+
+
