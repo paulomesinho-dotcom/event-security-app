@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -9,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useWorkplace } from "@/contexts/WorkplaceContext";
 import { AlertTriangle, CheckCircle2, Circle, Search, MapPin, Globe, Eye, Lock, ShieldAlert, Clock, PlayCircle, X, FileWarning } from "lucide-react";
 import dynamic from "next/dynamic";
+import SuspectManager from "@/components/SuspectManager";
 
 const MapViewer = dynamic(() => import("@/components/MapViewer"), { ssr: false });
 
@@ -44,9 +44,6 @@ export default function EmergencyDashboard() {
   const [uploading, setUploading] = useState(false);
   const [showMissingForm, setShowMissingForm] = useState(false);
   
-  const [suspects, setSuspects] = useState<any[]>([]);
-  const [selectedDashboardSuspect, setSelectedDashboardSuspect] = useState<any>(null);
-
   const [activeTab, setActiveTab] = useState<TabType>("local_evac");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -86,7 +83,6 @@ export default function EmergencyDashboard() {
     });
 
     const unsubShifts = onSnapshot(collection(db, "shifts"), (snap) => {
-      // Filter active shifts and keep full data
       const actives = snap.docs.filter(d => d.data().status === "active").map(d => ({ id: d.id, ...d.data() }));
       setActiveShifts(actives);
     });
@@ -97,17 +93,6 @@ export default function EmergencyDashboard() {
         .map(d => ({ id: d.id, ...(d.data() as any) }));
       setAllEmergencyIncidents(allIncs);
       setEmergencyIncidents(allIncs.filter(inc => inc.status === "open"));
-    });
-
-    const unsubSuspects = onSnapshot(collection(db, "suspicious_persons"), (snap) => {
-       const docs = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-       docs.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-       setSuspects(docs);
-       
-       setSelectedDashboardSuspect((prev: any) => {
-         if (!prev) return null;
-         return docs.find(s => s.id === prev.id) || prev;
-       });
     });
 
     let unsubWorkplace = () => {};
@@ -129,7 +114,6 @@ export default function EmergencyDashboard() {
       unsubHistory();
       unsubShifts();
       unsubIncidents();
-      unsubSuspects();
       unsubWorkplace();
     };
   }, [user, activeWorkplaceId]);
@@ -308,11 +292,8 @@ export default function EmergencyDashboard() {
   };
 
   const renderUserTable = (usersToRender: any[], alertAck: string[], evacAck: string[], isEvacuation: boolean, targetWorkplaceId: string | null) => {
-    // Apenas vigias em turno (Capitães e Superadmins sempre aparecem se as regras assim o definirem, mas aqui filtramos vigias sem turno)
     const onShiftUsers = usersToRender.filter(u => {
       if (u.role === "vigia") {
-         // Is this vigia active in the target workplace?
-         // If targetWorkplaceId is null, it's global emergency, so we check if they are active ANYWHERE.
          const hasShift = activeShifts.some((s: any) => 
             s.personId === u.id && 
             (targetWorkplaceId === null || s.workplaceId === targetWorkplaceId || !s.workplaceId)
@@ -379,9 +360,6 @@ export default function EmergencyDashboard() {
                     filtered.map(u => {
                       const received = alertAck.includes(u.id);
                       const evacuated = evacAck.includes(u.id);
-                      // Determine if this user reported an emergency incident in this context
-                      // For simplicity, we just check if they have ANY recent emergency incident
-                      // Ideally we'd filter by time or specific emergency ID.
                       const userIncidents = emergencyIncidents.filter(inc => inc.vigiaId === u.id);
 
                       const shiftForUser = activeShifts.find((s: any) => s.personId === u.id);
@@ -394,7 +372,6 @@ export default function EmergencyDashboard() {
                       return (
                         <React.Fragment key={u.id}>
                         <tr style={{ background: isExpanded ? "var(--color-bg)" : "transparent" }}>
-                           {/* Nome & Função */}
                            <td>
                              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
                                <div style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--color-primary)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", fontSize: "0.8rem" }}>
@@ -407,7 +384,6 @@ export default function EmergencyDashboard() {
                              </div>
                            </td>
 
-                           {/* Workplace & Posicao */}
                            <td>
                              <div style={{ fontWeight: 500, color: "var(--color-text-primary)" }}>{workplaceName}</div>
                              <div 
@@ -419,7 +395,6 @@ export default function EmergencyDashboard() {
                              </div>
                            </td>
 
-                           {/* Receção Alerta */}
                            <td style={{ textAlign: "center" }}>
                               <span style={{ 
                                 display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.35rem 0.75rem", borderRadius: "var(--radius-full)", fontSize: "0.75rem", fontWeight: 600,
@@ -431,7 +406,6 @@ export default function EmergencyDashboard() {
                               </span>
                            </td>
 
-                           {/* Local Evacuado */}
                            {isEvacuation && (
                              <td style={{ textAlign: "center" }}>
                                {shiftForUser ? (
@@ -449,7 +423,6 @@ export default function EmergencyDashboard() {
                              </td>
                            )}
 
-                           {/* Ações / Ocorrências */}
                            <td>
                               <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "0.5rem" }}>
                                 {activeIncident && (
@@ -787,124 +760,7 @@ export default function EmergencyDashboard() {
 
          {activeTab === "suspects" && (
            <div className="animate-fade-in">
-             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: suspects.length > 0 ? "1rem" : "1.5rem" }}>
-                <h2 style={{ fontSize: "1.15rem", fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--color-text-primary)" }}>
-                   Gestão de Suspeitos
-                </h2>
-             </div>
-
-             {suspects.length > 0 && (
-               <div style={{ background: "linear-gradient(135deg, rgba(30,10,60,0.9), rgba(45,16,96,0.9))", borderRadius: "var(--radius-lg)", padding: "1rem 1.25rem", border: "1px solid rgba(168,85,247,0.4)", marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: "1rem", boxShadow: "0 4px 20px rgba(168,85,247,0.2)" }}>
-                 <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "rgba(168,85,247,0.25)", border: "1.5px solid rgba(168,85,247,0.6)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                   <Search size={18} color="#d8b4fe" />
-                 </div>
-                 <div>
-                   <p style={{ margin: 0, fontSize: "0.7rem", fontWeight: 700, color: "#c084fc", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "0.15rem" }}>⚠ SUSPEITO EM ACOMPANHAMENTO</p>
-                   <p style={{ margin: 0, color: "#e9d5ff", fontWeight: 600 }}>
-                     {suspects.length === 1 ? suspects[0].description : `${suspects.length} suspeitos a ser acompanhados`}
-                   </p>
-                 </div>
-               </div>
-             )}
-             
-             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem", alignItems: "start" }}>
-               {/* List of Suspects */}
-               <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)", overflow: "hidden" }}>
-                 <div style={{ padding: "1rem 1.25rem", borderBottom: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                   <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>Suspeitos Ativos</h3>
-                   <span style={{ background: suspects.length > 0 ? "rgba(168,85,247,0.15)" : "var(--color-bg)", color: suspects.length > 0 ? "#a855f7" : "var(--color-text-secondary)", fontWeight: 700, fontSize: "0.8rem", padding: "0.2rem 0.65rem", borderRadius: "999px", border: suspects.length > 0 ? "1px solid rgba(168,85,247,0.3)" : "1px solid var(--color-border)" }}>{suspects.length}</span>
-                 </div>
-                 <div style={{ padding: "0.75rem" }}>
-                   {suspects.length === 0 ? (
-                     <div style={{ textAlign: "center", padding: "2rem", color: "var(--color-text-secondary)" }}>
-                       <Search size={36} style={{ opacity: 0.25, margin: "0 auto 0.75rem", display: "block" }} />
-                       <p style={{ margin: 0, fontSize: "0.9rem" }}>Nenhum suspeito ativo.</p>
-                     </div>
-                   ) : (
-                     <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                       {suspects.map(sus => (
-                         <div key={sus.id} onClick={() => setSelectedDashboardSuspect(sus)} style={{ padding: "0.9rem 1rem", borderRadius: "var(--radius-md)", border: `1px solid ${selectedDashboardSuspect?.id === sus.id ? '#a855f7' : 'var(--color-border)'}`, background: selectedDashboardSuspect?.id === sus.id ? 'rgba(168,85,247,0.08)' : 'var(--color-bg)', cursor: "pointer", display: "flex", gap: "0.75rem", alignItems: "center", transition: "all 0.2s" }}>
-                            {sus.photoUrl ? (
-                              <img src={sus.photoUrl} alt="Suspeito" style={{ width: "44px", height: "44px", objectFit: "cover", borderRadius: "var(--radius-sm)", flexShrink: 0 }} />
-                            ) : (
-                              <div style={{ width: "44px", height: "44px", background: "rgba(168,85,247,0.1)", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-sm)", color: "#a855f7", flexShrink: 0 }}>
-                                <Search size={18} />
-                              </div>
-                            )}
-                            <div style={{ flex: 1, overflow: "hidden" }}>
-                              <p style={{ margin: "0 0 0.2rem 0", fontWeight: 600, fontSize: "0.9rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sus.description}</p>
-                              <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.75rem", color: "var(--color-text-secondary)" }}>
-                                <span>{sus.initialLocation}</span>
-                                <span>·</span>
-                                <span>{new Date(sus.createdAt).toLocaleTimeString("pt-PT", {hour: "2-digit", minute:"2-digit"})}</span>
-                              </div>
-                            </div>
-                            <div style={{ color: "#a855f7", fontSize: "1.2rem", flexShrink: 0 }}>›</div>
-                         </div>
-                       ))}
-                     </div>
-                   )}
-                 </div>
-               </div>
-
-               {/* Detail View */}
-               <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)", minHeight: "400px", overflow: "hidden" }}>
-                 {!selectedDashboardSuspect ? (
-                   <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "var(--color-text-tertiary)", padding: "3rem" }}>
-                     <Search size={48} style={{ marginBottom: "1rem", opacity: 0.2 }} />
-                     <p style={{ margin: 0, textAlign: "center", fontSize: "0.9rem" }}>Selecione um suspeito para ver os detalhes e evolução</p>
-                   </div>
-                 ) : (
-                   <div>
-                     {/* Detail header */}
-                     <div style={{ padding: "1rem 1.25rem", borderBottom: "1px solid rgba(168,85,247,0.2)", background: "rgba(168,85,247,0.05)", display: "flex", gap: "0.75rem", alignItems: "center" }}>
-                       <div style={{ flex: 1, overflow: "hidden" }}>
-                         <h3 style={{ margin: "0 0 0.25rem 0", fontSize: "1rem", fontWeight: 700, lineHeight: 1.3 }}>{selectedDashboardSuspect.description}</h3>
-                         <span style={{ fontSize: "0.8rem", color: "#a855f7", fontWeight: 600 }}>Por {selectedDashboardSuspect.vigiaName} · {new Date(selectedDashboardSuspect.createdAt).toLocaleTimeString("pt-PT", {hour:"2-digit", minute:"2-digit"})}</span>
-                       </div>
-                     </div>
-
-                     <div style={{ padding: "1.25rem" }}>
-                       {selectedDashboardSuspect.photoUrl && (
-                         <img src={selectedDashboardSuspect.photoUrl} alt="Foto Suspeito" style={{ width: "100%", maxHeight: "240px", objectFit: "contain", borderRadius: "var(--radius-md)", marginBottom: "1.25rem", background: "var(--color-bg)" }} />
-                       )}
-                       
-                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", fontSize: "0.875rem", marginBottom: "1.5rem" }}>
-                         <div style={{ background: "var(--color-bg)", padding: "0.6rem 0.8rem", borderRadius: "var(--radius-md)", borderLeft: "3px solid #a855f7" }}>
-                           <strong style={{ color: "#a855f7", display: "block", marginBottom: "0.2rem", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>📍 Local Inicial</strong>
-                           {selectedDashboardSuspect.initialLocation}
-                         </div>
-                         <div style={{ background: "var(--color-bg)", padding: "0.6rem 0.8rem", borderRadius: "var(--radius-md)", borderLeft: "3px solid rgba(168,85,247,0.4)" }}>
-                           <strong style={{ color: "var(--color-text-secondary)", display: "block", marginBottom: "0.2rem", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>🧭 Direção</strong>
-                           {selectedDashboardSuspect.direction || "—"}
-                         </div>
-                       </div>
-                       
-                       <h4 style={{ margin: "0 0 1rem 0", fontSize: "0.85rem", fontWeight: 700, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Histórico ({selectedDashboardSuspect.updates?.length || 0})</h4>
-                       <div style={{ display: "flex", flexDirection: "column", gap: "1rem", borderLeft: "2px solid rgba(168,85,247,0.25)", paddingLeft: "1.25rem", marginLeft: "0.5rem" }}>
-                         {(!selectedDashboardSuspect.updates || selectedDashboardSuspect.updates.length === 0) && (
-                           <span style={{ fontSize: "0.85rem", color: "var(--color-text-tertiary)" }}>Nenhuma atualização registada ainda.</span>
-                         )}
-                         {selectedDashboardSuspect.updates?.map((u: any, i: number) => (
-                           <div key={i} style={{ position: "relative" }}>
-                             <div style={{ position: "absolute", left: "-1.6rem", top: "0.3rem", width: "10px", height: "10px", borderRadius: "50%", background: "#a855f7", border: "2px solid var(--color-surface)" }} />
-                             <div style={{ background: "var(--color-bg)", borderRadius: "var(--radius-md)", padding: "0.75rem 1rem", border: "1px solid var(--color-border)" }}>
-                               <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: u.message ? "0.5rem" : 0 }}>
-                                 <span style={{ fontSize: "0.7rem", background: "rgba(168,85,247,0.1)", color: "#a855f7", padding: "0.15rem 0.5rem", borderRadius: "999px", fontWeight: 700 }}>{u.type.replace("_"," ").toUpperCase()}</span>
-                                 <span style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)", fontWeight: 600 }}>{u.vigiaName}</span>
-                                 <span style={{ fontSize: "0.7rem", color: "var(--color-text-tertiary)", marginLeft: "auto" }}>{new Date(u.timestamp).toLocaleTimeString("pt-PT", {hour: "2-digit", minute:"2-digit"})}</span>
-                               </div>
-                               {u.message && <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--color-text-primary)" }}>{u.message}</p>}
-                               {u.photoUrl && <img src={u.photoUrl} alt="Atualização" style={{ width: "100%", maxWidth: "200px", borderRadius: "var(--radius-md)", marginTop: "0.75rem" }} />}
-                             </div>
-                           </div>
-                         ))}
-                       </div>
-                     </div>
-                   </div>
-                 )}
-               </div>
-             </div>
+             <SuspectManager />
            </div>
          )}
 

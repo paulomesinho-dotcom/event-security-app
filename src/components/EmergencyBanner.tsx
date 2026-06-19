@@ -517,7 +517,7 @@ export default function EmergencyBanner() {
                     )}
                     <p style={{ margin: 0, fontSize: "0.95rem", whiteSpace: "pre-wrap", color: "var(--color-text-primary)", fontWeight: 500 }}>{m.description}</p>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "1rem", fontSize: "0.85rem" }}>
-                      <div><strong style={{ color: "var(--color-text-secondary)" }}>Visto em:</strong><br/>{m.initialLocation} {m.lat && m.lng && <a href={`https://maps.google.com/?q=${m.lat},${m.lng}`} target="_blank" rel="noreferrer" style={{ color: "#a855f7", textDecoration: "underline", marginLeft: "4px" }}>(Ver no Mapa)</a>}</div>
+                      <div><strong style={{ color: "var(--color-text-secondary)" }}>Visto em:</strong><br/>{m.initialLocation} <a href={`https://maps.google.com/?q=${m.lat && m.lng ? `${m.lat},${m.lng}` : encodeURIComponent('Porto ' + m.initialLocation)}`} target="_blank" rel="noreferrer" style={{ color: "#a855f7", textDecoration: "underline", marginLeft: "4px" }}>(Ver no Mapa)</a></div>
                       <div><strong style={{ color: "var(--color-text-secondary)" }}>Direção:</strong><br/>{m.direction || "Desconhecida"}</div>
                     </div>
                   </div>

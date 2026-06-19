@@ -951,8 +951,8 @@ export default function VigiaDashboard() {
       )}
 
       {showNewSuspectModal && (
-        <div style={{ position: "fixed", top: "60px", left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.85)", zIndex: 10001, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-          <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-lg) var(--radius-lg) 0 0", width: "100%", maxWidth: "480px", display: "flex", flexDirection: "column", height: "calc(100% - 20px)", maxHeight: "100%", overflow: "hidden" }}>
+        <div style={{ position: "fixed", top: "60px", left: 0, right: 0, bottom: 0, background: "var(--color-bg)", zIndex: 10001, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div style={{ background: "var(--color-surface)", width: "100%", display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
             {/* Purple gradient header */}
             <div style={{ background: "linear-gradient(135deg, #1e0a3c, #2d1060)", padding: "1.25rem 1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
@@ -1028,7 +1028,7 @@ export default function VigiaDashboard() {
                   {selectedSuspect.description}
                 </p>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginTop: "1.25rem", paddingTop: "1rem", borderTop: "1px dashed rgba(168,85,247,0.3)", fontSize: "0.85rem" }}>
-                  <div><strong style={{ color: "#a855f7" }}>Visto em:</strong><br/>{selectedSuspect.initialLocation} {selectedSuspect.lat && selectedSuspect.lng && <a href={`https://maps.google.com/?q=${selectedSuspect.lat},${selectedSuspect.lng}`} target="_blank" rel="noreferrer" style={{ color: "#a855f7", textDecoration: "underline", marginLeft: "4px" }}>(Mapa)</a>}</div>
+                  <div><strong style={{ color: "#a855f7" }}>Visto em:</strong><br/>{selectedSuspect.initialLocation} <a href={`https://maps.google.com/?q=${selectedSuspect.lat && selectedSuspect.lng ? `${selectedSuspect.lat},${selectedSuspect.lng}` : encodeURIComponent('Porto ' + selectedSuspect.initialLocation)}`} target="_blank" rel="noreferrer" style={{ color: "#a855f7", textDecoration: "underline", marginLeft: "4px" }}>(Mapa)</a></div>
                   <div><strong style={{ color: "#a855f7" }}>Direção:</strong><br/>{selectedSuspect.direction || "Desconhecida"}</div>
                   <div><strong style={{ color: "#a855f7" }}>Reportado por:</strong><br/>{selectedSuspect.vigiaName}</div>
                   <div><strong style={{ color: "#a855f7" }}>Hora:</strong><br/>{new Date(selectedSuspect.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
@@ -1059,11 +1059,9 @@ export default function VigiaDashboard() {
                             <img src={upd.photoUrl} alt="Atualização" style={{ width: "100%", maxHeight: "150px", objectFit: "cover", borderRadius: "var(--radius-sm)", marginBottom: "0.5rem" }} />
                           )}
                           {upd.message && <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--color-text-secondary)", whiteSpace: "pre-wrap" }}>{upd.message}</p>}
-                          {upd.lat && upd.lng && (
-                            <div style={{ marginTop: "0.5rem" }}>
-                              <a href={`https://maps.google.com/?q=${upd.lat},${upd.lng}`} target="_blank" rel="noreferrer" style={{ fontSize: "0.8rem", color: "#a855f7", textDecoration: "underline" }}>(Ver Local no Mapa)</a>
-                            </div>
-                          )}
+                          <div style={{ marginTop: "0.5rem" }}>
+                            <a href={`https://maps.google.com/?q=${upd.lat && upd.lng ? `${upd.lat},${upd.lng}` : encodeURIComponent('Porto ' + selectedSuspect.initialLocation)}`} target="_blank" rel="noreferrer" style={{ fontSize: "0.8rem", color: "#a855f7", textDecoration: "underline" }}>(Ver Local no Mapa)</a>
+                          </div>
                         </div>
                       </div>
                     ))}

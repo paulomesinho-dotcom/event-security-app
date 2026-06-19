@@ -88,13 +88,11 @@ export default function SuspectManager() {
                     <div><strong style={{ color: "var(--color-text-secondary)" }}>Direção:</strong> {selectedSuspect.direction || "Desconhecida"}</div>
                     <div><strong style={{ color: "var(--color-text-secondary)" }}>Reportado por:</strong> {selectedSuspect.vigiaName}</div>
                     <div><strong style={{ color: "var(--color-text-secondary)" }}>Hora Registo:</strong> {new Date(selectedSuspect.createdAt).toLocaleString()}</div>
-                    {selectedSuspect.lat && selectedSuspect.lng && (
-                      <div style={{ marginTop: "0.5rem" }}>
-                        <a href={`https://maps.google.com/?q=${selectedSuspect.lat},${selectedSuspect.lng}`} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", background: "rgba(168,85,247,0.1)", color: "#a855f7", padding: "0.5rem 1rem", borderRadius: "var(--radius-full)", textDecoration: "none", fontWeight: 600, fontSize: "0.85rem" }}>
-                          <Navigation size={14} /> Abrir GPS Inicial
-                        </a>
-                      </div>
-                    )}
+                    <div style={{ marginTop: "0.5rem" }}>
+                      <a href={`https://maps.google.com/?q=${selectedSuspect.lat && selectedSuspect.lng ? `${selectedSuspect.lat},${selectedSuspect.lng}` : encodeURIComponent('Porto ' + selectedSuspect.initialLocation)}`} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", background: "rgba(168,85,247,0.1)", color: "#a855f7", padding: "0.5rem 1rem", borderRadius: "var(--radius-full)", textDecoration: "none", fontWeight: 600, fontSize: "0.85rem" }}>
+                        <Navigation size={14} /> Abrir Local no Mapa
+                      </a>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -123,11 +121,9 @@ export default function SuspectManager() {
                             <img src={upd.photoUrl} alt="Atualização" style={{ width: "100%", maxHeight: "200px", objectFit: "cover", borderRadius: "var(--radius-sm)", marginBottom: "0.5rem" }} />
                           )}
                           {upd.message && <p style={{ margin: 0, fontSize: "0.95rem" }}>{upd.message}</p>}
-                          {upd.lat && upd.lng && (
-                            <a href={`https://maps.google.com/?q=${upd.lat},${upd.lng}`} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", marginTop: "0.75rem", fontSize: "0.8rem", color: "#a855f7", textDecoration: "underline" }}>
-                              <MapPin size={14} /> Ver GPS da Atualização
-                            </a>
-                          )}
+                          <a href={`https://maps.google.com/?q=${upd.lat && upd.lng ? `${upd.lat},${upd.lng}` : encodeURIComponent('Porto ' + selectedSuspect.initialLocation)}`} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", marginTop: "0.75rem", fontSize: "0.8rem", color: "#a855f7", textDecoration: "underline" }}>
+                            <MapPin size={14} /> Ver Local da Atualização
+                          </a>
                         </div>
                       </div>
                     ))}
