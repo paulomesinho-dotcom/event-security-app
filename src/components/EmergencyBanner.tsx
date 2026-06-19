@@ -6,7 +6,7 @@ import { doc, onSnapshot, setDoc, collection, query, where, addDoc } from "fireb
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useWorkplace } from "@/contexts/WorkplaceContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { AlertTriangle, CheckCircle2, ShieldAlert, X, Camera, Bell } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ShieldAlert, X, Camera, Bell, Image as ImageIcon } from "lucide-react";
 
 export default function EmergencyBanner() {
   const { user } = useAuth();
@@ -340,12 +340,12 @@ export default function EmergencyBanner() {
             <div style={{ marginBottom: "2rem" }}>
               <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600 }}>Fotografia (Opcional)</label>
               <div style={{ display: "flex", gap: "0.5rem" }}>
-                <label style={{ flex: 1, padding: "0.75rem", background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", textAlign: "center", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}>
-                  📸 Câmara
+                <label style={{ flex: 1, padding: "0.75rem", background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}>
+                  <Camera size={16} /> Câmara
                   <input type="file" accept="image/*" capture="environment" onChange={e => setIncidentPhoto(e.target.files?.[0] || null)} style={{ display: "none" }} />
                 </label>
-                <label style={{ flex: 1, padding: "0.75rem", background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", textAlign: "center", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}>
-                  🖼️ Galeria
+                <label style={{ flex: 1, padding: "0.75rem", background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}>
+                  <ImageIcon size={16} /> Galeria
                   <input type="file" accept="image/*" onChange={e => setIncidentPhoto(e.target.files?.[0] || null)} style={{ display: "none" }} />
                 </label>
               </div>
