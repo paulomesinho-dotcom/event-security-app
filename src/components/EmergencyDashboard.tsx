@@ -26,7 +26,7 @@ export default function EmergencyDashboard() {
 
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [workplaceUsers, setWorkplaceUsers] = useState<any[]>([]);
-  const [activeShifts, setActiveShifts] = useState<string[]>([]);
+  const [activeShifts, setActiveShifts] = useState<any[]>([]);
   const [emergencyIncidents, setEmergencyIncidents] = useState<any[]>([]);
   const [selectedIncident, setSelectedIncident] = useState<any>(null);
 
@@ -60,14 +60,11 @@ export default function EmergencyDashboard() {
     const unsubUsers = onSnapshot(collection(db, "users"), (snap) => {
       const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setAllUsers(users);
-      if (activeWorkplaceId) {
-        setWorkplaceUsers(users.filter((u: any) => u.workplaceId === activeWorkplaceId || u.role === "captain"));
-      }
     });
 
     const unsubShifts = onSnapshot(collection(db, "shifts"), (snap) => {
-      // Filter active shifts
-      const actives = snap.docs.filter(d => d.data().status === "active").map(d => d.data().vigiaId);
+      // Filter active shifts and keep full data
+      const actives = snap.docs.filter(d => d.data().status === "active").map(d => ({ id: d.id, ...d.data() }));
       setActiveShifts(actives);
     });
 
@@ -177,10 +174,18 @@ export default function EmergencyDashboard() {
     }
   };
 
-  const renderUserTable = (usersToRender: any[], alertAck: string[], evacAck: string[], isEvacuation: boolean) => {
+  const renderUserTable = (usersToRender: any[], alertAck: string[], evacAck: string[], isEvacuation: boolean, targetWorkplaceId: string | null) => {
     // Apenas vigias em turno (Capitães e Superadmins sempre aparecem se as regras assim o definirem, mas aqui filtramos vigias sem turno)
     const onShiftUsers = usersToRender.filter(u => {
-      if (u.role === "vigia" && !activeShifts.includes(u.id)) return false;
+      if (u.role === "vigia") {
+         // Is this vigia active in the target workplace?
+         // If targetWorkplaceId is null, it's global emergency, so we check if they are active ANYWHERE.
+         const hasShift = activeShifts.some((s: any) => 
+            s.vigiaId === u.id && 
+            (targetWorkplaceId === null || s.workplaceId === targetWorkplaceId)
+         );
+         if (!hasShift) return false;
+      }
       return true;
     });
 
@@ -364,7 +369,7 @@ export default function EmergencyDashboard() {
                </div>
              )}
 
-             {renderUserTable(allUsers, globalAlertAck, globalEvacAck, true)}
+             {renderUserTable(allUsers, globalAlertAck, globalEvacAck, true, null)}
           </div>
         )}
 
@@ -413,7 +418,7 @@ export default function EmergencyDashboard() {
                     </div>
                   )}
 
-                  {renderUserTable(workplaceUsers, workplaceAlertAck, workplaceEvacAck, true)}
+                  {renderUserTable(allUsers, workplaceAlertAck, workplaceEvacAck, true, activeWorkplaceId)}
                 </>
              )}
           </div>
@@ -442,7 +447,7 @@ export default function EmergencyDashboard() {
                     <div style={{ background: "#eab308", width: 12, height: 12, borderRadius: "50%", animation: "pulse 2s infinite" }} />
                     <span style={{ color: "#eab308", fontWeight: 600, letterSpacing: "0.05em" }}>BUSCA ATIVA EM CURSO</span>
                   </div>
-                  {renderUserTable(allUsers, globalAlertAck, globalEvacAck, false)}
+                  {renderUserTable(allUsers, globalAlertAck, globalEvacAck, false, null)}
                 </>
              ) : (
                 <div style={{ background: "var(--color-bg)", padding: "2rem", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)", maxWidth: "800px" }}>
