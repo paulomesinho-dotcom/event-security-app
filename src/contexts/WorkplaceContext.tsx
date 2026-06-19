@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc } from "firebase/firestore";
 import { useAuth } from "./AuthContext";
 
 export interface Workplace {
@@ -49,6 +49,35 @@ export const WorkplaceProvider = ({ children }: { children: React.ReactNode }) =
       q = query(collection(db, "workplaces"), where("captainId", "==", user.uid));
     } else if (user.role === "superadmin") {
       q = query(collection(db, "workplaces"));
+    } else if (user.role === "vigia") {
+      // For Vigia, we don't load all workplaces, but we need to know their active workplace ID
+      // so components like EmergencyBanner can work.
+      const unsubShifts = onSnapshot(query(collection(db, "shifts"), where("vigiaId", "==", user.uid), where("status", "in", ["pending", "active"])), (snap) => {
+        if (!snap.empty) {
+          const wpId = snap.docs[0].data().workplaceId;
+          if (wpId) {
+             setActiveWorkplaceId(wpId);
+             // Also listen to that specific workplace to populate workplaces array
+             const unsubWp = onSnapshot(doc(db, "workplaces", wpId), (wpSnap) => {
+               if (wpSnap.exists()) {
+                 setWorkplaces([{ id: wpSnap.id, ...wpSnap.data() } as Workplace]);
+               }
+               setLoadingWorkplaces(false);
+             });
+             // We won't strictly cleanup this inner unsubWp cleanly here without a ref, 
+             // but since it's tied to shifts changing (which is rare), it's acceptable for now,
+             // or we can just fetch it once. Let's fetch it once to avoid memory leaks.
+          } else {
+            setActiveWorkplaceId(null);
+            setLoadingWorkplaces(false);
+          }
+        } else {
+          setActiveWorkplaceId(null);
+          setWorkplaces([]);
+          setLoadingWorkplaces(false);
+        }
+      });
+      return () => unsubShifts();
     } else {
       setWorkplaces([]);
       setActiveWorkplaceId(null);

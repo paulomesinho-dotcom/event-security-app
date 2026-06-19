@@ -67,8 +67,8 @@ export default function EmergencyBanner() {
     }
   };
 
-  // Full Screen overlay for Global Alerts
-  if (globalEmergency) {
+  // Full Screen overlay for Global Alerts (Unacknowledged)
+  if (globalEmergency && !hasAcknowledged) {
     return (
       <div style={{
         position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
@@ -108,42 +108,34 @@ export default function EmergencyBanner() {
         )}
 
         {/* Read Receipt Button */}
-        {!hasAcknowledged && (
-          <button 
-            onClick={handleAcknowledge}
-            style={{ 
-              marginTop: "3rem", padding: "1.5rem 3rem", fontSize: "1.5rem", fontWeight: 900,
-              background: "white", color: bgColor, border: "none", borderRadius: "var(--radius-full)",
-              cursor: "pointer", boxShadow: "0 10px 25px rgba(0,0,0,0.3)"
-            }}
-          >
-            CONFIRMAR RECEÇÃO DO ALERTA
-          </button>
-        )}
-        
-        {hasAcknowledged && (
-          <div style={{ marginTop: "3rem", padding: "1rem 2rem", fontSize: "1.2rem", fontWeight: 700, background: "rgba(0,0,0,0.2)", borderRadius: "var(--radius-full)" }}>
-            ✓ Receção Confirmada
-          </div>
-        )}
+        <button 
+          onClick={handleAcknowledge}
+          style={{ 
+            marginTop: "3rem", padding: "1.5rem 3rem", fontSize: "1.5rem", fontWeight: 900,
+            background: "white", color: bgColor, border: "none", borderRadius: "var(--radius-full)",
+            cursor: "pointer", boxShadow: "0 10px 25px rgba(0,0,0,0.3)"
+          }}
+        >
+          CONFIRMAR RECEÇÃO
+        </button>
       </div>
     );
   }
 
-  // Small banner for workplace emergency (only visible inside the workplace)
+  // Small banner for workplace emergency OR acknowledged global emergency
   return (
     <div style={{
       width: "100%",
-      background: "var(--color-danger)",
-      color: "white",
+      background: bgColor,
+      color: isMissingPerson ? "#000" : "white",
       padding: "0.75rem 1rem",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
       gap: "1rem",
       fontWeight: "bold",
-      fontSize: "1.1rem",
-      animation: "pulseRed 1.5s infinite",
+      fontSize: "1rem",
+      animation: isMissingPerson ? "pulseWarning 1.5s infinite" : "pulseRed 1.5s infinite",
       zIndex: 9990,
       position: "relative",
     }}>
@@ -153,10 +145,19 @@ export default function EmergencyBanner() {
           50% { background-color: #991b1b; }
           100% { background-color: #ef4444; }
         }
+        @keyframes pulseWarning {
+          0% { background-color: #eab308; }
+          50% { background-color: #a16207; }
+          100% { background-color: #eab308; }
+        }
       `}</style>
-      <AlertTriangle size={24} />
-      <span>⚠️ MODO DE EMERGÊNCIA ATIVADO - EVACUAR O LOCAL IMEDIATAMENTE ⚠️</span>
-      <AlertTriangle size={24} />
+      <AlertTriangle size={20} />
+      <span>
+        {globalEmergency 
+          ? (isMissingPerson ? "⚠️ ALERTA DE PESSOA DESAPARECIDA (Receção Confirmada) ⚠️" : "⚠️ ALERTA GLOBAL ATIVO (Receção Confirmada) ⚠️")
+          : "⚠️ MODO DE EMERGÊNCIA ATIVADO NO LOCAL ⚠️"}
+      </span>
+      <AlertTriangle size={20} />
     </div>
   );
 }

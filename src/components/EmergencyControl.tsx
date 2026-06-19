@@ -89,7 +89,7 @@ export default function EmergencyControl() {
         await setDoc(doc(db, "settings", "global"), { 
           globalEmergency: true, 
           globalAlertType: "evacuation",
-          globalAlertAck: [] 
+          globalAlertAck: [user.uid] 
         }, { merge: true });
       }
     } catch (err) {
@@ -117,7 +117,7 @@ export default function EmergencyControl() {
         globalEmergency: true, 
         globalAlertType: "missing_person",
         globalAlertDetails: { description: missingDesc, photoUrl },
-        globalAlertAck: []
+        globalAlertAck: [user.uid]
       }, { merge: true });
       
       setMissingDesc("");
