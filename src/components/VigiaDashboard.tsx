@@ -275,7 +275,7 @@ export default function VigiaDashboard() {
   const activeWorkplace = activeShift ? workplaces.find(w => w.planIds?.includes(activeShift.planId)) : null;
 
   const submitIncident = async () => {
-    if (!activeShift || !activeWorkplace) return alert("Precisa de ter um turno ativo para reportar ocorrências.");
+    if (!activeShift) return alert("Precisa de ter um turno ativo para reportar ocorrências.");
     if (!incidentText) return alert("Descreva a ocorrência.");
     setIncidentUploading(true);
     try {
@@ -291,7 +291,7 @@ export default function VigiaDashboard() {
         vigiaId: user?.uid,
         shiftId: activeShift.id,
         locatorName: activeShift.locatorName,
-        workplaceId: activeWorkplace.id,
+        workplaceId: activeWorkplace ? activeWorkplace.id : "unknown",
         message: incidentText,
         photoUrl,
         status: "open",
@@ -408,7 +408,9 @@ export default function VigiaDashboard() {
                       <MapPin size={20} color="#34d399" />
                     </div>
                     <div style={{ minWidth: 0 }}>
-                      <p style={{ margin: 0, fontSize: "0.65rem", color: "rgba(255,255,255,0.45)", fontWeight: 600, letterSpacing: "0.05em" }}>POSIÇÃO ATUAL</p>
+                      <p style={{ margin: 0, fontSize: "0.65rem", color: "rgba(255,255,255,0.45)", fontWeight: 600, letterSpacing: "0.05em" }}>
+                        {activeWorkplace ? `${activeWorkplace.name.toUpperCase()} - ` : ""}POSIÇÃO ATUAL
+                      </p>
                       <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{activeShift.locatorName}</h3>
                     </div>
                   </div>
