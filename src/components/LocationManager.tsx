@@ -13,59 +13,50 @@ export interface AbstractLocation {
   local: string;
   sublocal: string;
   subsublocal: string;
-  shiftModelId: string;
   captainId: string;
+  workplaceId?: string;
+  shiftModelId?: string; // Legacy support
 }
 
 export default function LocationManager() {
   const { user } = useAuth();
   const { activeWorkplaceId, activeWorkplace } = useWorkplace();
   const [locations, setLocations] = useState<AbstractLocation[]>([]);
-  const [models, setModels] = useState<ShiftModel[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [showForm, setShowForm] = useState(false);
   const [local, setLocal] = useState("");
   const [sublocal, setSublocal] = useState("");
   const [subsublocal, setSubsublocal] = useState("");
-  const [shiftModelId, setShiftModelId] = useState("");
 
   useEffect(() => {
     if (!user || !activeWorkplaceId) {
       setLocations([]);
-      setModels([]);
       setLoading(false);
       return;
     }
     
     const captainId = activeWorkplace?.captainId || user.uid;
 
-    // Fetch Locations (legacy + current workplace)
+    // Fetch Locations
     const qLoc = query(collection(db, "abstract_locations"), where("captainId", "==", captainId));
     const unsubLoc = onSnapshot(qLoc, (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
       setLocations(data.filter(l => l.workplaceId === activeWorkplaceId));
-    });
-
-    // Fetch Shift Models (legacy + current workplace)
-    const qMod = query(collection(db, "shift_models"), where("captainId", "==", captainId));
-    const unsubMod = onSnapshot(qMod, (snap) => {
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-      setModels(data.filter(m => m.workplaceId === activeWorkplaceId));
       setLoading(false);
     });
 
-    return () => { unsubLoc(); unsubMod(); };
+    return () => unsubLoc();
   }, [user, activeWorkplaceId, activeWorkplace]);
 
   const handleCreate = async () => {
-    if (!local || !shiftModelId || !activeWorkplaceId) return;
+    if (!local || !activeWorkplaceId) return;
     await addDoc(collection(db, "abstract_locations"), {
-      local, sublocal, subsublocal, shiftModelId, 
+      local, sublocal, subsublocal, 
       captainId: activeWorkplace?.captainId || user?.uid,
       workplaceId: activeWorkplaceId
     });
-    setLocal(""); setSublocal(""); setSubsublocal(""); setShiftModelId("");
+    setLocal(""); setSublocal(""); setSubsublocal("");
     setShowForm(false);
   };
 
@@ -103,25 +94,16 @@ export default function LocationManager() {
               <label style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>Sub-sublocal (Opcional)</label>
               <input type="text" className="input" placeholder="Ex: Catraca Esquerda" value={subsublocal} onChange={e => setSubsublocal(e.target.value)} />
             </div>
-            <div>
-              <label style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>Modelo de Turno Aplicável</label>
-              <select className="input" value={shiftModelId} onChange={e => setShiftModelId(e.target.value)} required>
-                 <option value="">Selecione um Modelo...</option>
-                 {models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
-            </div>
           </div>
           <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button className="btn btn-success" onClick={handleCreate} disabled={!local || !shiftModelId}>Gravar</button>
+            <button className="btn btn-success" onClick={handleCreate} disabled={!local}>Gravar</button>
             <button className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancelar</button>
           </div>
         </div>
       )}
 
       <div style={{ display: "grid", gap: "1rem", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))" }}>
-        {locations.map(l => {
-          const m = models.find(mod => mod.id === l.shiftModelId);
-          return (
+        {locations.map(l => (
             <div key={l.id} style={{ background: "var(--color-surface)", padding: "1rem", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", position: "relative" }}>
               <button onClick={() => handleDelete(l.id)} style={{ position: "absolute", top: "0.5rem", right: "0.5rem", background: "transparent", border: "none", color: "var(--color-danger)", cursor: "pointer" }}>
                 <Trash2 size={16} />
@@ -130,13 +112,9 @@ export default function LocationManager() {
               <div style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>
                 {l.sublocal && <div>{l.sublocal}</div>}
                 {l.subsublocal && <div>{l.subsublocal}</div>}
-                <div style={{ marginTop: "0.5rem", paddingTop: "0.5rem", borderTop: "1px dashed var(--color-border)", color: "var(--color-primary)" }}>
-                   <strong>Turno:</strong> {m ? m.name : "Desconhecido"}
-                </div>
               </div>
             </div>
-          )
-        })}
+        ))}
         {locations.length === 0 && !showForm && <p style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>Nenhum local criado.</p>}
       </div>
     </div>

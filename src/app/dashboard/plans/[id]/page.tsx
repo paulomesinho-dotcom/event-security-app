@@ -54,7 +54,8 @@ export default function PlanDetailPage() {
   const [showShiftModal, setShowShiftModal] = useState(false);
   const [selectedLocator, setSelectedLocator] = useState<Locator | null>(null);
   const [selectedVigia, setSelectedVigia] = useState("");
-  const [selectedPeriod, setSelectedPeriod] = useState<"morning" | "afternoon" | "both">("morning");
+  const [selectedShiftModelId, setSelectedShiftModelId] = useState("");
+  const [selectedPeriodId, setSelectedPeriodId] = useState("");
   const [currentAssignments, setCurrentAssignments] = useState<any[]>([]);
 
   // Toggle Mode for adding pins
@@ -154,20 +155,23 @@ export default function PlanDetailPage() {
     const assigns = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     setCurrentAssignments(assigns);
     setSelectedVigia("");
-    setSelectedPeriod("morning");
+    setSelectedShiftModelId("");
+    setSelectedPeriodId("");
 
     setShowShiftModal(true);
   };
 
   const assignShift = async () => {
-    if (!selectedLocator || !selectedVigia) return;
+    if (!selectedLocator || !selectedVigia || !selectedShiftModelId || !selectedPeriodId) return;
 
-    // Get shift info to copy to assignments
-    const locationInfo = locations.find(l => l.id === selectedLocator.locationId);
-    const modelInfo = shiftModels.find(m => m.id === locationInfo?.shiftModelId) as any;
+    const modelInfo = shiftModels.find(m => m.id === selectedShiftModelId) as any;
+    const periodInfo = modelInfo?.periods?.find((p: any) => p.id === selectedPeriodId);
+    
+    if (!modelInfo || !periodInfo) return;
+
     const modelDates = modelInfo?.dates ? modelInfo.dates.join(", ") : (modelInfo?.days || "");
 
-    // Check for conflicts (if not editing current)
+    // Check for conflicts
     const qConflicts = query(collection(db, "assignments"), 
       where("vigiaId", "==", selectedVigia), 
       where("dates", "==", modelDates)
@@ -177,8 +181,8 @@ export default function PlanDetailPage() {
     
     conflictsSnap.forEach(d => {
        const a = d.data();
-       // Conflict if periods overlap
-       if (a.period === "both" || selectedPeriod === "both" || a.period === selectedPeriod) {
+       // Conflict if periods overlap exactly (simplification: same period id or legacy logic)
+       if (a.periodId === selectedPeriodId || a.period === "both") {
           hasConflict = true;
        }
     });
@@ -188,40 +192,24 @@ export default function PlanDetailPage() {
        return;
     }
 
-    // Get shift info to copy to assignments and the old shifts collection for VigiaDashboard compatibility
+    const locationInfo = locations.find(l => l.id === selectedLocator.locationId);
 
     // Save modern assignment
     const assignmentData = {
        vigiaId: selectedVigia,
        locationId: selectedLocator.locationId,
        locatorId: selectedLocator.id,
+       shiftModelId: selectedShiftModelId,
+       periodId: selectedPeriodId,
+       periodName: periodInfo.name,
        dates: modelDates,
-       period: selectedPeriod,
        captainId: user?.uid
     };
 
     const ref = await addDoc(collection(db, "assignments"), assignmentData);
     const assignmentRefId = ref.id;
 
-    // Save legacy Shift object for compatibility with current VigiaDashboard
-    let shiftTimeStr = "";
-    if (selectedPeriod === "morning") {
-      const start = modelInfo?.morningStart || "?";
-      const end = modelInfo?.morningEnd || "?";
-      shiftTimeStr = `Manhã (${start} - ${end})`;
-    }
-    if (selectedPeriod === "afternoon") {
-      const start = modelInfo?.afternoonStart || "?";
-      const end = modelInfo?.afternoonEnd || "?";
-      shiftTimeStr = `Tarde (${start} - ${end})`;
-    }
-    if (selectedPeriod === "both") {
-      const mStart = modelInfo?.morningStart || "?";
-      const mEnd = modelInfo?.morningEnd || "?";
-      const aStart = modelInfo?.afternoonStart || "?";
-      const aEnd = modelInfo?.afternoonEnd || "?";
-      shiftTimeStr = `Manhã (${mStart} - ${mEnd}) e Tarde (${aStart} - ${aEnd})`;
-    }
+    const shiftTimeStr = `${periodInfo.name} (${periodInfo.start} - ${periodInfo.end})`;
 
     await addDoc(collection(db, "shifts"), {
        assignmentId: assignmentRefId,
@@ -230,7 +218,7 @@ export default function PlanDetailPage() {
        planId,
        personId: selectedVigia,
        captainId: user?.uid,
-       name: `${locationInfo?.local} - ${selectedPeriod}`,
+       name: `${locationInfo?.local || selectedLocator.name} - ${periodInfo.name}`,
        time: shiftTimeStr,
        days: modelDates,
        status: "pending",
@@ -240,6 +228,8 @@ export default function PlanDetailPage() {
     setShowShiftModal(false);
     setSelectedLocator(null);
     setSelectedVigia("");
+    setSelectedShiftModelId("");
+    setSelectedPeriodId("");
     setCurrentAssignments([]);
     alert("Escala gravada com sucesso!");
   };
@@ -439,7 +429,7 @@ export default function PlanDetailPage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                   {currentAssignments.map(assign => {
                     const vName = availableVigias.find(v => v.id === assign.vigiaId)?.name || "Vigia Removido";
-                    const pName = assign.period === "morning" ? "Manhã" : assign.period === "afternoon" ? "Tarde" : "Dia Inteiro";
+                    const pName = assign.periodName || (assign.period === "morning" ? "Manhã" : assign.period === "afternoon" ? "Tarde" : "Dia Inteiro");
                     return (
                       <div key={assign.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--color-bg)", padding: "0.75rem", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)" }}>
                         <div>
@@ -479,14 +469,36 @@ export default function PlanDetailPage() {
                 Adicionar Novo Turno
               </h4>
               <>
-                  {(() => {
-                     const loc = locations.find(l => l.id === selectedLocator.locationId);
-                     const mod = shiftModels.find(m => m.id === loc?.shiftModelId) as any;
+                  <div>
+                    <label style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>Modelo de Turno</label>
+                    <select className="input" value={selectedShiftModelId} onChange={(e) => { setSelectedShiftModelId(e.target.value); setSelectedPeriodId(""); }}>
+                      <option value="">-- Selecione o Modelo --</option>
+                      {shiftModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </select>
+                  </div>
+
+                  {selectedShiftModelId && (
+                    <div>
+                      <label style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>Período a Cumprir</label>
+                      <select className="input" value={selectedPeriodId} onChange={(e) => setSelectedPeriodId(e.target.value)}>
+                        <option value="">-- Selecione o Período --</option>
+                        {shiftModels.find(m => m.id === selectedShiftModelId)?.periods?.map((p: any) => (
+                           <option key={p.id} value={p.id}>{p.name} ({p.start} - {p.end})</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {selectedPeriodId && (() => {
+                     const mod = shiftModels.find(m => m.id === selectedShiftModelId) as any;
                      const modelDatesStr = mod?.dates ? mod.dates.join(", ") : (mod?.days || "");
                      const modelDatesArr = modelDatesStr.split(",").map((s: string) => s.trim()).filter((s: string) => s);
 
                      const busyVigias = allAssignments.filter(a => {
-                        if (a.period !== "both" && selectedPeriod !== "both" && a.period !== selectedPeriod) return false;
+                        // Check if it's the exact same period, or overlapping legacy periods
+                        if (a.periodId !== selectedPeriodId && a.period !== "both") return false;
+                        
+                        // Check if dates overlap
                         const aDatesArr = (a.dates || "").split(",").map((s: string) => s.trim()).filter((s: string) => s);
                         return aDatesArr.some((d: string) => modelDatesArr.includes(d));
                      }).map(a => a.vigiaId);
@@ -497,22 +509,13 @@ export default function PlanDetailPage() {
                         <div>
                           <label style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>Vigia</label>
                           <select className="input" value={selectedVigia} onChange={(e) => setSelectedVigia(e.target.value)}>
-                            <option value="">-- Selecione o Vigia --</option>
+                            <option value="">-- Selecione o Vigia Livre --</option>
                             {filteredVigias.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                           </select>
                           {busyVigias.length > 0 && <p style={{ fontSize: "0.75rem", color: "var(--color-danger)", marginTop: "0.25rem" }}>{busyVigias.length} vigia(s) oculto(s) por indisponibilidade neste turno.</p>}
                         </div>
                      );
                   })()}
-
-                  <div>
-                    <label style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>Período a Cumprir</label>
-                    <select className="input" value={selectedPeriod} onChange={(e: any) => setSelectedPeriod(e.target.value)}>
-                      <option value="morning">Manhã</option>
-                      <option value="afternoon">Tarde</option>
-                      <option value="both">Ambos (Manhã e Tarde)</option>
-                    </select>
-                  </div>
                 </>
             </form>
 

@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
-import { doc, setDoc, onSnapshot, collection } from "firebase/firestore";
+import { doc, setDoc, onSnapshot, collection, addDoc, getDocs, query, where, updateDoc } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWorkplace } from "@/contexts/WorkplaceContext";
@@ -102,11 +102,65 @@ export default function EmergencyDashboard() {
 
   if (!canActivate) return <div style={{ padding: "2rem" }}>Acesso não autorizado.</div>;
 
+  const closeEmergencyHistory = async (type: "global" | "workplace", workplaceId?: string) => {
+    try {
+      const qConstraints: any[] = [where("status", "==", "active"), where("type", "==", type)];
+      if (type === "workplace" && workplaceId) {
+        qConstraints.push(where("workplaceId", "==", workplaceId));
+      }
+      const qHistory = query(collection(db, "emergency_history"), ...qConstraints);
+      const snap = await getDocs(qHistory);
+      const promises = snap.docs.map(d => {
+         const data = type === "global" ? { alertAck: globalAlertAck, evacAck: globalEvacAck } : { alertAck: workplaceAlertAck, evacAck: workplaceEvacAck };
+         return updateDoc(doc(db, "emergency_history", d.id), {
+            status: "closed",
+            endTime: new Date().toISOString(),
+            finalAlertAck: data.alertAck,
+            finalEvacAck: data.evacAck,
+         });
+      });
+      await Promise.all(promises);
+    } catch(e) { console.error("Error closing history", e); }
+  };
+
+  const createEmergencyHistory = async (type: "global" | "workplace", alertType: string, workplaceId?: string) => {
+    try {
+      await addDoc(collection(db, "emergency_history"), {
+         type,
+         alertType,
+         workplaceId: workplaceId || null,
+         status: "active",
+         startTime: new Date().toISOString(),
+         initiatedBy: user?.uid
+      });
+    } catch(e) { console.error("Error creating history", e); }
+  };
+
+  const clearDashboardManual = async () => {
+     if (globalEmergency || workplaceEmergency) {
+        alert("Não pode limpar o ecrã durante uma emergência ativa. Desative a emergência primeiro.");
+        return;
+     }
+     if (!confirm("Tem a certeza que deseja limpar as receções e dados de evacuação do ecrã?")) return;
+     try {
+        if (activeTab === "global_evac" || activeTab === "missing") {
+           await setDoc(doc(db, "settings", "global"), { globalAlertAck: [], globalEvacAck: [] }, { merge: true });
+        } else if (activeWorkplaceId) {
+           await setDoc(doc(db, "workplaces", activeWorkplaceId), { alertAck: [], evacAck: [] }, { merge: true });
+        }
+        alert("Ecrã limpo com sucesso.");
+     } catch (err) {
+        console.error(err);
+        alert("Erro ao limpar ecrã.");
+     }
+  };
+
   const toggleGlobal = async () => {
     if (!isSuperadmin) return;
     if (!confirm(globalEmergency ? "Desativar Alerta Global?" : "Tem a certeza que deseja ATIVAR O ALERTA GLOBAL? Isto afetará TODOS os eventos!")) return;
     try {
       if (globalEmergency) {
+        await closeEmergencyHistory("global");
         await setDoc(doc(db, "settings", "global"), { globalEmergency: false }, { merge: true });
       } else {
         await setDoc(doc(db, "settings", "global"), { 
@@ -115,6 +169,7 @@ export default function EmergencyDashboard() {
           globalAlertAck: [user.uid],
           globalEvacAck: []
         }, { merge: true });
+        await createEmergencyHistory("global", "evacuation");
       }
     } catch (err) {
       console.error(err);
@@ -144,6 +199,7 @@ export default function EmergencyDashboard() {
         globalAlertAck: [user.uid],
         globalEvacAck: []
       }, { merge: true });
+      await createEmergencyHistory("global", "missing_person");
       
       setMissingDesc("");
       setMissingPhoto(null);
@@ -160,6 +216,7 @@ export default function EmergencyDashboard() {
     if (!confirm(workplaceEmergency ? "Desativar Emergência Local?" : "Tem a certeza que deseja ATIVAR A EMERGÊNCIA neste local?")) return;
     try {
        if (workplaceEmergency) {
+         await closeEmergencyHistory("workplace", activeWorkplaceId);
          await setDoc(doc(db, "workplaces", activeWorkplaceId), { isEmergency: false }, { merge: true });
        } else {
          await setDoc(doc(db, "workplaces", activeWorkplaceId), { 
@@ -167,6 +224,7 @@ export default function EmergencyDashboard() {
            alertAck: [user.uid],
            evacAck: []
          }, { merge: true });
+         await createEmergencyHistory("workplace", "evacuation", activeWorkplaceId);
        }
     } catch (err) {
       console.error(err);
@@ -181,8 +239,8 @@ export default function EmergencyDashboard() {
          // Is this vigia active in the target workplace?
          // If targetWorkplaceId is null, it's global emergency, so we check if they are active ANYWHERE.
          const hasShift = activeShifts.some((s: any) => 
-            s.vigiaId === u.id && 
-            (targetWorkplaceId === null || s.workplaceId === targetWorkplaceId)
+            s.personId === u.id && 
+            (targetWorkplaceId === null || s.workplaceId === targetWorkplaceId || !s.workplaceId)
          );
          if (!hasShift) return false;
       }
@@ -326,7 +384,7 @@ export default function EmergencyDashboard() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--color-surface)", borderRadius: "var(--radius-lg)" }}>
       
-      <div style={{ borderBottom: "1px solid var(--color-border)", padding: "0 1rem" }}>
+      <div style={{ borderBottom: "1px solid var(--color-border)", padding: "0 1rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", gap: "1rem", overflowX: "auto" }}>
           {isSuperadmin && (
             <TabButton id="global_evac" icon={Globe} label="Evacuação Total" color="var(--color-text-secondary)" activeColor="var(--color-danger)" />
@@ -335,6 +393,22 @@ export default function EmergencyDashboard() {
           {isSuperadmin && (
             <TabButton id="missing" icon={Eye} label="Pessoa Desaparecida" color="var(--color-text-secondary)" activeColor="#eab308" />
           )}
+        </div>
+        <div style={{ display: "flex", gap: "1rem" }}>
+          {!globalEmergency && !workplaceEmergency && (
+             <button 
+               onClick={clearDashboardManual}
+               style={{ background: "transparent", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)", padding: "0.5rem 1rem", borderRadius: "var(--radius-md)", fontSize: "0.85rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.5rem" }}
+             >
+               Limpar Ecrã
+             </button>
+          )}
+          <button 
+             onClick={() => window.location.href = "/dashboard/emergency-history"}
+             style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)", padding: "0.5rem 1rem", borderRadius: "var(--radius-md)", fontSize: "0.85rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.5rem" }}
+          >
+             <Clock size={16} /> Ver Histórico
+          </button>
         </div>
       </div>
 
