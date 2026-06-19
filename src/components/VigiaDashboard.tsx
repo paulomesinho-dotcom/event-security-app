@@ -525,10 +525,9 @@ export default function VigiaDashboard() {
   const pendingShifts = shifts.filter(s => s.status === "pending");
   const completedShifts = shifts.filter(s => s.status === "completed");
   const zelloLink = activeWorkplace?.zelloGroupLink || activeWorkplace?.zelloChannelLink;
-
   return (
-    <>
-    {/* SCROLLABLE CONTENT — flex: 1 so it fills remaining height */}
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", position: "relative", overflow: "hidden" }}>
+      {/* SCROLLABLE CONTENT — flex: 1 so it fills remaining height */}
     <div className="animate-fade-in vigia-app-main" style={{ padding: "1rem 0.5rem" }}>
       {fcmBanner && (
         <div style={{ marginBottom: "1rem", display: "flex", gap: "0.75rem", alignItems: "flex-start", padding: "0.9rem 1rem", background: "linear-gradient(135deg, #1e1b4b, #312e81)", borderRadius: "var(--radius-lg)", color: "white", boxShadow: "0 4px 20px rgba(99,102,241,0.4)", animation: "slideDown 0.3s ease" }}>
@@ -763,7 +762,7 @@ export default function VigiaDashboard() {
       )}
 
       {showIncidentModal && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
           <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "500px", padding: "2rem", position: "relative" }}>
             <button onClick={() => setShowIncidentModal(false)} style={{ position: "absolute", top: "1.5rem", right: "1.5rem", background: "transparent", border: "none", color: "var(--color-text-secondary)", cursor: "pointer" }}>
               <X size={24} />
@@ -852,7 +851,7 @@ export default function VigiaDashboard() {
       )}
 
       {showHistoryModal && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--color-bg)", zIndex: 9000, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "var(--color-bg)", zIndex: 9000, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1rem 1.5rem", borderBottom: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
             <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}><FileWarning size={18}/> O Meu Histórico</h3>
             <button onClick={() => setShowHistoryModal(false)} style={{ background: "none", border: "none", color: "var(--color-text-primary)", cursor: "pointer" }}><X size={20}/></button>
@@ -886,7 +885,7 @@ export default function VigiaDashboard() {
       {/* Modals for Suspicious Persons */}
       
       {showSuspectsList && !showNewSuspectModal && !selectedSuspect && (
-        <div style={{ position: "fixed", top: "60px", left: 0, right: 0, bottom: 0, background: "var(--color-bg)", zIndex: 9000, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "var(--color-bg)", zIndex: 9000, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           {/* Header with gradient */}
           <div style={{ background: "linear-gradient(135deg, #1e0a3c, #2d1060)", padding: "1.25rem 1.5rem", borderBottom: "1px solid rgba(168,85,247,0.3)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
@@ -951,7 +950,7 @@ export default function VigiaDashboard() {
       )}
 
       {showNewSuspectModal && (
-        <div style={{ position: "fixed", top: "60px", left: 0, right: 0, bottom: 0, background: "var(--color-bg)", zIndex: 10001, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "var(--color-bg)", zIndex: 10001, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={{ background: "var(--color-surface)", width: "100%", display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
             {/* Purple gradient header */}
             <div style={{ background: "linear-gradient(135deg, #1e0a3c, #2d1060)", padding: "1.25rem 1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1006,7 +1005,7 @@ export default function VigiaDashboard() {
       )}
 
       {selectedSuspect && (
-        <div style={{ position: "fixed", top: "60px", left: 0, right: 0, bottom: 0, background: "var(--color-bg)", zIndex: 9002, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "var(--color-bg)", zIndex: 9002, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={{ background: "linear-gradient(135deg, #1e0a3c, #2d1060)", padding: "1.25rem 1.5rem", borderBottom: "1px solid rgba(168,85,247,0.3)", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
               <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "rgba(168,85,247,0.25)", border: "1.5px solid rgba(168,85,247,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1144,6 +1143,7 @@ export default function VigiaDashboard() {
         <span style={{ fontSize: "0.65rem", fontWeight: 600, color: myIncidents.length > 0 ? "#6366f1" : "var(--color-text-secondary)" }}>Histórico</span>
       </button>
     </div>
-    </>
+    </div>
   );
 }
+
