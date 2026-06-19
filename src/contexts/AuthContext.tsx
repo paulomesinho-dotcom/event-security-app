@@ -12,6 +12,7 @@ interface UserProfile {
   email: string | null;
   name: string | null;
   role: Role;
+  workplaceId?: string;
 }
 
 interface AuthContextType {
@@ -34,10 +35,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           const userDoc = await getDoc(userDocRef);
           
           let role: Role = "vigia"; // default role
+          let workplaceId: string | undefined = undefined;
           
           if (userDoc.exists()) {
             const data = userDoc.data();
             role = data.role || "vigia";
+            workplaceId = data.workplaceId;
           }
 
           setUser({
@@ -45,6 +48,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             email: firebaseUser.email,
             name: firebaseUser.displayName,
             role: role,
+            workplaceId: workplaceId
           });
         } catch (error) {
           console.error("Error fetching user role:", error);

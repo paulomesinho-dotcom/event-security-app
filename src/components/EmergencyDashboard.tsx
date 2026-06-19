@@ -26,6 +26,9 @@ export default function EmergencyDashboard() {
 
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [workplaceUsers, setWorkplaceUsers] = useState<any[]>([]);
+  const [activeShifts, setActiveShifts] = useState<string[]>([]);
+  const [emergencyIncidents, setEmergencyIncidents] = useState<any[]>([]);
+  const [selectedIncident, setSelectedIncident] = useState<any>(null);
 
   const [missingDesc, setMissingDesc] = useState("");
   const [missingPhoto, setMissingPhoto] = useState<File | null>(null);
@@ -62,6 +65,23 @@ export default function EmergencyDashboard() {
       }
     });
 
+    const unsubShifts = onSnapshot(collection(db, "shifts"), (snap) => {
+      // Filter active shifts
+      const actives = snap.docs.filter(d => d.data().status === "active").map(d => d.data().vigiaId);
+      setActiveShifts(actives);
+    });
+
+    const unsubIncidents = onSnapshot(collection(db, "incidents"), (snap) => {
+      const incs = snap.docs
+        .filter(d => d.data().isEmergencyIncident === true)
+        .map(d => ({ id: d.id, ...d.data() }));
+      setEmergencyIncidents(incs);
+      
+      // Play a sound if there's a new incident (simple logic, checking length or using audio API if supported)
+      // Since it's hard to reliably play audio without interaction, we skip for now,
+      // but we could use a simple Audio object if we kept track of previous length
+    });
+
     let unsubWorkplace = () => {};
     if (activeWorkplaceId) {
       unsubWorkplace = onSnapshot(doc(db, "workplaces", activeWorkplaceId), (snap) => {
@@ -77,6 +97,8 @@ export default function EmergencyDashboard() {
     return () => {
       unsubGlobal();
       unsubUsers();
+      unsubShifts();
+      unsubIncidents();
       unsubWorkplace();
     };
   }, [user, activeWorkplaceId]);
@@ -156,7 +178,13 @@ export default function EmergencyDashboard() {
   };
 
   const renderUserTable = (usersToRender: any[], alertAck: string[], evacAck: string[], isEvacuation: boolean) => {
-    const filtered = usersToRender.filter(u => u.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    // Apenas vigias em turno (Capitães e Superadmins sempre aparecem se as regras assim o definirem, mas aqui filtramos vigias sem turno)
+    const onShiftUsers = usersToRender.filter(u => {
+      if (u.role === "vigia" && !activeShifts.includes(u.id)) return false;
+      return true;
+    });
+
+    const filtered = onShiftUsers.filter(u => u.name.toLowerCase().includes(searchQuery.toLowerCase()));
     
     const ackCount = filtered.filter(u => alertAck.includes(u.id)).length;
     const evacCount = filtered.filter(u => evacAck.includes(u.id)).length;
@@ -167,7 +195,7 @@ export default function EmergencyDashboard() {
             <div>
               <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600 }}>Acompanhamento em Tempo Real</h3>
               <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.85rem", color: "var(--color-text-secondary)" }}>
-                {filtered.length} efetivos listados
+                {filtered.length} efetivos em turno
                 <span style={{ margin: "0 0.5rem", color: "var(--color-border)" }}>|</span>
                 <span style={{ color: "var(--color-success)" }}>{ackCount} Receções</span>
                 {isEvacuation && (
@@ -198,19 +226,25 @@ export default function EmergencyDashboard() {
                      <th style={{ padding: "1rem 1.5rem", textAlign: "left", fontWeight: 600, color: "var(--color-text-secondary)" }}>Nome & Função</th>
                      <th style={{ padding: "1rem 1.5rem", textAlign: "center", fontWeight: 600, color: "var(--color-text-secondary)" }}>Receção do Alerta</th>
                      {isEvacuation && <th style={{ padding: "1rem 1.5rem", textAlign: "center", fontWeight: 600, color: "var(--color-text-secondary)" }}>Local Evacuado</th>}
+                     <th style={{ padding: "1rem 1.5rem", textAlign: "center", fontWeight: 600, color: "var(--color-text-secondary)" }}>Ocorrências</th>
                   </tr>
                </thead>
                <tbody>
                   {filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={isEvacuation ? 3 : 2} style={{ padding: "3rem", textAlign: "center", color: "var(--color-text-secondary)" }}>
-                        Nenhum resultado encontrado.
+                      <td colSpan={isEvacuation ? 4 : 3} style={{ padding: "3rem", textAlign: "center", color: "var(--color-text-secondary)" }}>
+                        Nenhum efetivo em turno encontrado.
                       </td>
                     </tr>
                   ) : (
                     filtered.map(u => {
                       const received = alertAck.includes(u.id);
                       const evacuated = evacAck.includes(u.id);
+                      // Determine if this user reported an emergency incident in this context
+                      // For simplicity, we just check if they have ANY recent emergency incident
+                      // Ideally we'd filter by time or specific emergency ID.
+                      const userIncidents = emergencyIncidents.filter(inc => inc.vigiaId === u.id);
+
                       return (
                         <tr key={u.id} style={{ borderTop: "1px solid var(--color-border)" }}>
                            <td style={{ padding: "1rem 1.5rem" }}>
@@ -236,6 +270,19 @@ export default function EmergencyDashboard() {
                                  : <span style={{ color: "var(--color-warning)", display: "inline-flex", alignItems: "center", gap: "0.3rem", background: "rgba(234, 179, 8, 0.1)", padding: "0.25rem 0.75rem", borderRadius: "var(--radius-full)" }}><Circle size={16}/> Em curso</span>}
                              </td>
                            )}
+                           <td style={{ padding: "1rem 1.5rem", textAlign: "center" }}>
+                              {userIncidents.length > 0 ? (
+                                <button 
+                                  onClick={() => setSelectedIncident(userIncidents[userIncidents.length - 1])}
+                                  style={{ background: "var(--color-danger)", color: "white", border: "none", borderRadius: "50%", width: 32, height: 32, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", animation: "pulse 2s infinite" }}
+                                  title="Ver Ocorrência"
+                                >
+                                  <AlertTriangle size={16} />
+                                </button>
+                              ) : (
+                                <span style={{ color: "var(--color-text-tertiary)" }}>-</span>
+                              )}
+                           </td>
                         </tr>
                       );
                     })
@@ -441,6 +488,48 @@ export default function EmergencyDashboard() {
           </div>
         )}
       </div>
+
+      {/* Incident Modal */}
+      {selectedIncident && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "600px", padding: "2rem", position: "relative" }}>
+            <button onClick={() => setSelectedIncident(null)} style={{ position: "absolute", top: "1.5rem", right: "1.5rem", background: "transparent", border: "none", color: "var(--color-text-secondary)", cursor: "pointer" }}>
+               ✕
+            </button>
+            <h2 style={{ margin: "0 0 0.5rem 0", color: "var(--color-danger)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <AlertTriangle size={24} /> Detalhes da Ocorrência
+            </h2>
+            <div style={{ color: "var(--color-text-secondary)", marginBottom: "1.5rem", fontSize: "0.9rem", display: "flex", gap: "1rem" }}>
+               <span>Reportado por: <strong>{selectedIncident.vigiaName}</strong></span>
+               <span>Local: <strong>{selectedIncident.locatorName}</strong></span>
+            </div>
+
+            <div style={{ background: "var(--color-bg)", padding: "1.5rem", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)", marginBottom: "1.5rem" }}>
+               <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", textTransform: "uppercase", color: "var(--color-text-secondary)", letterSpacing: "0.05em" }}>Descrição</h4>
+               <p style={{ margin: 0, fontSize: "1.1rem", whiteSpace: "pre-wrap", color: "var(--color-text-primary)" }}>
+                 {selectedIncident.message}
+               </p>
+            </div>
+
+            {selectedIncident.photoUrl && (
+              <div style={{ marginBottom: "2rem" }}>
+                <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", textTransform: "uppercase", color: "var(--color-text-secondary)", letterSpacing: "0.05em" }}>Evidência Fotográfica</h4>
+                <img src={selectedIncident.photoUrl} alt="Ocorrência" style={{ width: "100%", maxHeight: "300px", objectFit: "contain", borderRadius: "var(--radius-md)", background: "var(--color-bg)", border: "1px solid var(--color-border)" }} />
+              </div>
+            )}
+
+            <button 
+              onClick={() => setSelectedIncident(null)} 
+              style={{
+                width: "100%", padding: "1rem", background: "var(--color-surface)", color: "var(--color-text-primary)",
+                border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", fontWeight: 600, fontSize: "1rem", cursor: "pointer"
+              }}
+            >
+              FECHAR
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

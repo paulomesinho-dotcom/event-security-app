@@ -20,6 +20,7 @@ interface WorkplaceContextType {
   activeWorkplaceId: string | null;
   setActiveWorkplaceId: (id: string) => void;
   loadingWorkplaces: boolean;
+  hasActiveShift: boolean;
 }
 
 const WorkplaceContext = createContext<WorkplaceContextType>({
@@ -27,12 +28,14 @@ const WorkplaceContext = createContext<WorkplaceContextType>({
   activeWorkplace: null,
   activeWorkplaceId: null,
   setActiveWorkplaceId: () => {},
-  loadingWorkplaces: true
+  loadingWorkplaces: true,
+  hasActiveShift: false
 });
 
 export const WorkplaceProvider = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
   const [workplaces, setWorkplaces] = useState<Workplace[]>([]);
+  const [hasActiveShift, setHasActiveShift] = useState(false);
   const [activeWorkplaceId, setActiveWorkplaceId] = useState<string | null>(null);
   const [loadingWorkplaces, setLoadingWorkplaces] = useState(true);
 
@@ -53,24 +56,28 @@ export const WorkplaceProvider = ({ children }: { children: React.ReactNode }) =
       // For Vigia, we don't load all workplaces, but we need to know their active workplace ID
       // so components like EmergencyBanner can work.
       const unsubShifts = onSnapshot(query(collection(db, "shifts"), where("vigiaId", "==", user.uid), where("status", "in", ["pending", "active"])), (snap) => {
+        let wpId = user.workplaceId || null;
+        let isActive = false;
         if (!snap.empty) {
-          const wpId = snap.docs[0].data().workplaceId;
-          if (wpId) {
-             setActiveWorkplaceId(wpId);
-             // Also listen to that specific workplace to populate workplaces array
-             const unsubWp = onSnapshot(doc(db, "workplaces", wpId), (wpSnap) => {
-               if (wpSnap.exists()) {
-                 setWorkplaces([{ id: wpSnap.id, ...wpSnap.data() } as Workplace]);
-               }
-               setLoadingWorkplaces(false);
-             });
-             // We won't strictly cleanup this inner unsubWp cleanly here without a ref, 
-             // but since it's tied to shifts changing (which is rare), it's acceptable for now,
-             // or we can just fetch it once. Let's fetch it once to avoid memory leaks.
-          } else {
-            setActiveWorkplaceId(null);
-            setLoadingWorkplaces(false);
+          const shiftDoc = snap.docs[0].data();
+          if (shiftDoc.workplaceId) {
+             wpId = shiftDoc.workplaceId;
           }
+          if (shiftDoc.status === "active") {
+             isActive = true;
+          }
+        }
+        setHasActiveShift(isActive);
+        
+        if (wpId) {
+           setActiveWorkplaceId(wpId);
+           // Also listen to that specific workplace to populate workplaces array
+           const unsubWp = onSnapshot(doc(db, "workplaces", wpId), (wpSnap) => {
+             if (wpSnap.exists()) {
+               setWorkplaces([{ id: wpSnap.id, ...wpSnap.data() } as Workplace]);
+             }
+             setLoadingWorkplaces(false);
+           });
         } else {
           setActiveWorkplaceId(null);
           setWorkplaces([]);
@@ -112,7 +119,14 @@ export const WorkplaceProvider = ({ children }: { children: React.ReactNode }) =
   const activeWorkplace = workplaces.find(w => w.id === activeWorkplaceId) || null;
 
   return (
-    <WorkplaceContext.Provider value={{ workplaces, activeWorkplace, activeWorkplaceId, setActiveWorkplaceId, loadingWorkplaces }}>
+    <WorkplaceContext.Provider value={{ 
+      workplaces, 
+      activeWorkplace, 
+      activeWorkplaceId, 
+      setActiveWorkplaceId,
+      loadingWorkplaces,
+      hasActiveShift
+    }}>
       {children}
     </WorkplaceContext.Provider>
   );
