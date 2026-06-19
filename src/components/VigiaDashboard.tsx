@@ -5,7 +5,7 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc, updateDoc, getDoc, addDoc, orderBy, limit } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useAuth } from "@/contexts/AuthContext";
-import { MapPin, Play, Square, Clock, Calendar, CheckCircle2, AlertTriangle, X, Bell, FileWarning, MessageCircle, Camera, Image as ImageIcon } from "lucide-react";
+import { MapPin, Play, Square, Clock, Calendar, CheckCircle2, AlertTriangle, X, Bell, FileWarning, MessageCircle, Camera, Image as ImageIcon, Search, Crosshair } from "lucide-react";
 import { requestNotificationPermission, onForegroundMessage } from "@/lib/firebase-messaging";
 
 import dynamic from "next/dynamic";
@@ -186,6 +186,23 @@ export default function VigiaDashboard() {
   const [incidentUploading, setIncidentUploading] = useState(false);
   const [myIncidents, setMyIncidents] = useState<any[]>([]);
 
+  // Suspicious Persons
+  const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
+  const [showSuspectsList, setShowSuspectsList] = useState(false);
+  const [showNewSuspectModal, setShowNewSuspectModal] = useState(false);
+  const [selectedSuspect, setSelectedSuspect] = useState<any>(null);
+  
+  const [suspectLocation, setSuspectLocation] = useState("");
+  const [suspectDirection, setSuspectDirection] = useState("");
+  const [suspectDesc, setSuspectDesc] = useState("");
+  const [suspectPhoto, setSuspectPhoto] = useState<File | null>(null);
+  const [suspectUploading, setSuspectUploading] = useState(false);
+
+  const [updateType, setUpdateType] = useState("avistamento");
+  const [updateMessage, setUpdateMessage] = useState("");
+  const [updatePhoto, setUpdatePhoto] = useState<File | null>(null);
+  const [updateUploading, setUpdateUploading] = useState(false);
+
   useEffect(() => {
     if (!user) return;
     const qShifts = query(collection(db, "shifts"), where("personId", "==", user.uid));
@@ -241,7 +258,21 @@ export default function VigiaDashboard() {
       setMyIncidents(inc);
     });
 
-    return () => { unsubShifts(); unsubNotifs(); unsubFcm(); unsubWorkplaces(); unsubIncidents(); };
+    const qSuspects = query(collection(db, "suspicious_persons"), where("status", "==", "active"));
+    const unsubSuspects = onSnapshot(qSuspects, (snap) => {
+      const s: any[] = [];
+      snap.forEach(d => s.push({ id: d.id, ...d.data() }));
+      s.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setActiveSuspects(s);
+      setSelectedSuspect((prev: any) => {
+        if (!prev) return null;
+        const updated = s.find(sus => sus.id === prev.id);
+        if (updated) return updated;
+        return null; // was closed
+      });
+    });
+
+    return () => { unsubShifts(); unsubNotifs(); unsubFcm(); unsubWorkplaces(); unsubIncidents(); unsubSuspects(); };
   }, [user]);
 
   useEffect(() => {
@@ -322,6 +353,103 @@ export default function VigiaDashboard() {
     }
   };
 
+  const handleCreateSuspect = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!suspectDesc) return alert("Por favor, descreva o suspeito.");
+    setSuspectUploading(true);
+    let photoUrl = "";
+    if (suspectPhoto) {
+      try {
+        const compressed = await compressImage(suspectPhoto);
+        const storage = getStorage();
+        const fileRef = ref(storage, `suspects/${Date.now()}_${user?.uid}.jpg`);
+        await uploadBytes(fileRef, compressed);
+        photoUrl = await getDownloadURL(fileRef);
+      } catch (err) {
+        console.error("Image upload failed", err);
+      }
+    }
+
+    try {
+      await addDoc(collection(db, "suspicious_persons"), {
+        vigiaId: user?.uid,
+        vigiaName: user?.name || user?.email || "Vigia",
+        initialLocation: suspectLocation || activeShift?.locatorName || "Desconhecido",
+        direction: suspectDirection,
+        description: suspectDesc,
+        photoUrl,
+        status: "active",
+        createdAt: new Date().toISOString(),
+        updates: []
+      });
+      setShowNewSuspectModal(false);
+      setSuspectDesc("");
+      setSuspectDirection("");
+      setSuspectLocation("");
+      setSuspectPhoto(null);
+    } catch (error) {
+      console.error(error);
+      alert("Erro ao criar alerta.");
+    } finally {
+      setSuspectUploading(false);
+    }
+  };
+
+  const handleAddSuspectUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedSuspect) return;
+    if (!updateMessage && updateType !== "resolvido" && updateType !== "falso_alarme") return alert("Adicione um comentário.");
+    
+    setUpdateUploading(true);
+    let photoUrl = "";
+    if (updatePhoto) {
+      try {
+        const compressed = await compressImage(updatePhoto);
+        const storage = getStorage();
+        const fileRef = ref(storage, `suspects_updates/${Date.now()}_${user?.uid}.jpg`);
+        await uploadBytes(fileRef, compressed);
+        photoUrl = await getDownloadURL(fileRef);
+      } catch (err) {
+        console.error("Image upload failed", err);
+      }
+    }
+
+    try {
+      const isClosing = updateType === "resolvido" || updateType === "falso_alarme";
+      const newUpdate = {
+        timestamp: new Date().toISOString(),
+        vigiaName: user?.name || user?.email || "Vigia",
+        type: updateType,
+        message: updateMessage,
+        photoUrl
+      };
+
+      const docRef = doc(db, "suspicious_persons", selectedSuspect.id);
+      
+      const payload: any = {
+        updates: [...(selectedSuspect.updates || []), newUpdate]
+      };
+      
+      if (isClosing) {
+        payload.status = updateType === "resolvido" ? "resolved" : "false_alarm";
+      }
+
+      await updateDoc(docRef, payload);
+      
+      setUpdateMessage("");
+      setUpdatePhoto(null);
+      setUpdateType("avistamento");
+      if (isClosing) {
+         setSelectedSuspect(null);
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Erro ao adicionar atualização.");
+    } finally {
+      setUpdateUploading(false);
+    }
+  };
+
   if (loading) return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "4rem", color: "var(--color-text-secondary)" }}>
       <Clock size={32} style={{ marginBottom: "1rem", opacity: 0.4 }} />
@@ -331,8 +459,7 @@ export default function VigiaDashboard() {
 
   const pendingShifts = shifts.filter(s => s.status === "pending");
   const completedShifts = shifts.filter(s => s.status === "completed");
-  const zelloLink = activeWorkplace?.zelloChannelLink;
-  const whatsappLink = activeWorkplace?.whatsappGroupLink;
+  const zelloLink = activeWorkplace?.zelloGroupLink || activeWorkplace?.zelloChannelLink;
 
   return (
     <>
@@ -647,6 +774,144 @@ export default function VigiaDashboard() {
         </div>
       )}
 
+      {/* Modals for Suspicious Persons */}
+      
+      {showSuspectsList && !showNewSuspectModal && !selectedSuspect && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--color-bg)", zIndex: 9000, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1rem 1.5rem", borderBottom: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+            <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "0.5rem", color: "#22c55e" }}><Search size={18}/> Pessoas Suspeitas</h3>
+            <button onClick={() => setShowSuspectsList(false)} style={{ background: "none", border: "none", color: "var(--color-text-primary)", cursor: "pointer" }}><X size={20}/></button>
+          </div>
+          <div style={{ padding: "1rem", flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "1rem", paddingBottom: "3rem" }}>
+            <button 
+              onClick={() => setShowNewSuspectModal(true)}
+              style={{ padding: "1rem", background: "#22c55e", color: "white", border: "none", borderRadius: "var(--radius-md)", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", fontSize: "1rem" }}>
+              <Crosshair size={20} /> DETETADO SUSPEITO
+            </button>
+            
+            {activeSuspects.length === 0 ? (
+               <div style={{ textAlign: "center", padding: "2rem", color: "var(--color-text-secondary)" }}>Nenhum suspeito ativo no momento.</div>
+            ) : (
+               activeSuspects.map(sus => (
+                 <div key={sus.id} onClick={() => setSelectedSuspect(sus)} style={{ background: "var(--color-surface)", borderRadius: "var(--radius-md)", padding: "1rem", border: "1px solid var(--color-border)", cursor: "pointer", display: "flex", gap: "1rem" }}>
+                    {sus.photoUrl ? (
+                      <img src={sus.photoUrl} alt="Suspeito" style={{ width: "60px", height: "60px", objectFit: "cover", borderRadius: "var(--radius-sm)", flexShrink: 0 }} />
+                    ) : (
+                      <div style={{ width: "60px", height: "60px", background: "var(--color-bg)", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-sm)", color: "var(--color-text-tertiary)", flexShrink: 0 }}>
+                        <Search size={24} />
+                      </div>
+                    )}
+                    <div style={{ flex: 1, overflow: "hidden" }}>
+                      <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.95rem", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sus.description}</p>
+                      <span style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)", display: "block" }}>Local: {sus.initialLocation}</span>
+                      <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)", display: "block" }}>Visto por: {sus.vigiaName} às {new Date(sus.createdAt).toLocaleTimeString("pt-PT", {hour: "2-digit", minute:"2-digit"})}</span>
+                    </div>
+                 </div>
+               ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {showNewSuspectModal && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", zIndex: 9001, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-lg)", width: "100%", maxWidth: "400px", display: "flex", flexDirection: "column", maxHeight: "90vh", overflow: "hidden" }}>
+            <div style={{ padding: "1rem", borderBottom: "1px solid var(--color-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ margin: 0, color: "var(--color-text-primary)" }}>Novo Suspeito</h3>
+              <button onClick={() => setShowNewSuspectModal(false)} style={{ background: "none", border: "none", color: "var(--color-text-primary)", cursor: "pointer" }}><X size={20} /></button>
+            </div>
+            <form onSubmit={handleCreateSuspect} style={{ padding: "1rem", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: "0.3rem" }}>Descrição Física / Roupa *</label>
+                <textarea required rows={3} value={suspectDesc} onChange={(e) => setSuspectDesc(e.target.value)} placeholder="Ex: Homem, t-shirt azul, chapéu preto..." className="input-field" style={{ resize: "none" }}></textarea>
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: "0.3rem" }}>Local Visto</label>
+                <input type="text" value={suspectLocation} onChange={(e) => setSuspectLocation(e.target.value)} placeholder={activeShift?.locatorName || "Desconhecido"} className="input-field" />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: "0.3rem" }}>Direção / Desloca-se para onde?</label>
+                <input type="text" value={suspectDirection} onChange={(e) => setSuspectDirection(e.target.value)} placeholder="Ex: Em direção ao palco principal" className="input-field" />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: "0.3rem" }}>Fotografia (Opcional)</label>
+                <input type="file" accept="image/*" capture="environment" onChange={(e) => setSuspectPhoto(e.target.files?.[0] || null)} id="suspectPhotoInput" style={{ display: "none" }} />
+                <label htmlFor="suspectPhotoInput" style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.75rem", background: suspectPhoto ? "rgba(16,185,129,0.1)" : "var(--color-bg)", border: suspectPhoto ? "1px solid #10b981" : "1px dashed var(--color-border)", borderRadius: "var(--radius-md)", color: suspectPhoto ? "#10b981" : "var(--color-text-secondary)", cursor: "pointer", justifyContent: "center" }}>
+                  <Camera size={18} />
+                  {suspectPhoto ? "Fotografia Adicionada" : "Tirar Foto"}
+                </label>
+              </div>
+              <button type="submit" disabled={suspectUploading || !suspectDesc} style={{ background: "#22c55e", color: "white", padding: "0.75rem", border: "none", borderRadius: "var(--radius-md)", fontWeight: 700, fontSize: "0.95rem", cursor: (suspectUploading || !suspectDesc) ? "not-allowed" : "pointer", opacity: (suspectUploading || !suspectDesc) ? 0.5 : 1, marginTop: "0.5rem" }}>
+                {suspectUploading ? "A Enviar..." : "LANÇAR ALERTA"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {selectedSuspect && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--color-surface)", zIndex: 9002, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1rem 1.5rem", borderBottom: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+            <h3 style={{ margin: 0, color: "#22c55e", fontSize: "1.1rem" }}>Alerta Suspeito</h3>
+            <button onClick={() => setSelectedSuspect(null)} style={{ background: "none", border: "none", color: "var(--color-text-primary)", cursor: "pointer" }}><X size={20}/></button>
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "1rem", display: "flex", flexDirection: "column", gap: "1rem", paddingBottom: "2rem" }}>
+            <div style={{ background: "var(--color-bg)", padding: "1rem", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)" }}>
+              <p style={{ margin: "0 0 0.5rem 0", fontSize: "1rem", fontWeight: 700 }}>{selectedSuspect.description}</p>
+              <div style={{ fontSize: "0.85rem", color: "var(--color-text-secondary)", display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                <span><strong>Local Inicial:</strong> {selectedSuspect.initialLocation}</span>
+                {selectedSuspect.direction && <span><strong>Direção:</strong> {selectedSuspect.direction}</span>}
+                <span><strong>Reportado por:</strong> {selectedSuspect.vigiaName} às {new Date(selectedSuspect.createdAt).toLocaleTimeString("pt-PT", {hour: "2-digit", minute:"2-digit"})}</span>
+              </div>
+              {selectedSuspect.photoUrl && (
+                <img src={selectedSuspect.photoUrl} alt="Suspeito" style={{ width: "100%", maxHeight: "250px", objectFit: "contain", borderRadius: "var(--radius-md)", marginTop: "1rem" }} />
+              )}
+            </div>
+
+            <div style={{ margin: "1rem 0" }}>
+              <h4 style={{ margin: "0 0 1rem 0", fontSize: "0.95rem" }}>Evolução da Ocorrência</h4>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem", borderLeft: "2px solid var(--color-border)", paddingLeft: "1rem", marginLeft: "0.5rem" }}>
+                {(!selectedSuspect.updates || selectedSuspect.updates.length === 0) && (
+                  <span style={{ fontSize: "0.85rem", color: "var(--color-text-tertiary)" }}>Nenhuma atualização ainda.</span>
+                )}
+                {selectedSuspect.updates?.map((u: any, i: number) => (
+                  <div key={i} style={{ position: "relative" }}>
+                    <div style={{ position: "absolute", left: "-1.35rem", top: "0.25rem", width: "10px", height: "10px", borderRadius: "50%", background: "var(--color-primary)" }} />
+                    <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)", fontWeight: 600 }}>{new Date(u.timestamp).toLocaleTimeString("pt-PT", {hour: "2-digit", minute:"2-digit"})} - {u.vigiaName}</span>
+                    <span style={{ display: "inline-block", marginLeft: "0.5rem", fontSize: "0.7rem", background: "rgba(34, 197, 94, 0.1)", color: "#22c55e", padding: "0.1rem 0.4rem", borderRadius: "4px", fontWeight: 700 }}>{u.type.toUpperCase()}</span>
+                    {u.message && <p style={{ margin: "0.25rem 0", fontSize: "0.9rem" }}>{u.message}</p>}
+                    {u.photoUrl && <img src={u.photoUrl} style={{ width: "100%", maxHeight: "150px", objectFit: "cover", borderRadius: "var(--radius-sm)", marginTop: "0.5rem" }} />}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <form onSubmit={handleAddSuspectUpdate} style={{ background: "var(--color-bg)", padding: "1rem", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <h4 style={{ margin: 0, fontSize: "0.95rem" }}>Adicionar Informação</h4>
+              <div>
+                <select value={updateType} onChange={(e) => setUpdateType(e.target.value)} className="input-field">
+                  <option value="avistamento">👀 Visto a passar / Atualização de Local</option>
+                  <option value="abordagem">✋ Abordado / Identificado</option>
+                  <option value="falso_alarme">❌ Falso Alarme / Resolvido (Fechar)</option>
+                  <option value="resolvido">✅ A pessoa foi embora (Fechar)</option>
+                </select>
+              </div>
+              <textarea rows={2} value={updateMessage} onChange={(e) => setUpdateMessage(e.target.value)} placeholder="Detalhes (Obrigatório para fechar a ocorrência)" className="input-field" style={{ resize: "none" }}></textarea>
+              
+              <input type="file" accept="image/*" capture="environment" onChange={(e) => setUpdatePhoto(e.target.files?.[0] || null)} id="updatePhotoInput" style={{ display: "none" }} />
+              <label htmlFor="updatePhotoInput" style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem", background: updatePhoto ? "rgba(16,185,129,0.1)" : "var(--color-surface)", border: updatePhoto ? "1px solid #10b981" : "1px dashed var(--color-border)", borderRadius: "var(--radius-md)", color: updatePhoto ? "#10b981" : "var(--color-text-secondary)", cursor: "pointer", justifyContent: "center", fontSize: "0.85rem" }}>
+                <Camera size={16} />
+                {updatePhoto ? "Foto Adicionada" : "Tirar Foto (Opcional)"}
+              </label>
+
+              <button type="submit" disabled={updateUploading || (!updateMessage && (updateType === 'resolvido' || updateType === 'falso_alarme'))} style={{ background: "var(--color-primary)", color: "white", padding: "0.75rem", border: "none", borderRadius: "var(--radius-md)", fontWeight: 700, cursor: updateUploading ? "not-allowed" : "pointer" }}>
+                {updateUploading ? "A enviar..." : "ENVIAR"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes pulse {
           0%, 100% { box-shadow: 0 0 0 3px rgba(16,185,129,0.2); }
@@ -667,14 +932,15 @@ export default function VigiaDashboard() {
               <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "#f97316" }}>Rádio</span>
             </a>
           )}
-          {whatsappLink && (
-            <a href={whatsappLink} target="_blank" rel="noopener noreferrer" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.3rem", textDecoration: "none", flex: "1 0 auto" }}>
-              <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: "rgba(34, 197, 94, 0.15)", border: "1.5px solid rgba(34,197,94,0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "#22c55e" }}>
-                <MessageCircle size={20} fill="currentColor" />
-              </div>
-              <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "#22c55e" }}>Chat</span>
-            </a>
-          )}
+          <button onClick={() => setShowSuspectsList(true)} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.3rem", background: "none", border: "none", cursor: "pointer", flex: "1 0 auto" }}>
+            <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: "rgba(34, 197, 94, 0.15)", border: "1.5px solid rgba(34,197,94,0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "#22c55e", position: "relative" }}>
+              <Search size={20} fill="currentColor" />
+              {activeSuspects.length > 0 && (
+                <span style={{ position: "absolute", top: "-3px", right: "-3px", background: "#22c55e", color: "white", borderRadius: "50%", width: "18px", height: "18px", fontSize: "0.6rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{activeSuspects.length}</span>
+              )}
+            </div>
+            <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "#22c55e" }}>Suspeito</span>
+          </button>
           <button onClick={() => setShowIncidentModal(true)} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.3rem", background: "none", border: "none", cursor: "pointer", flex: "1 0 auto" }}>
             <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: "linear-gradient(135deg, #dc2626, #ef4444)", boxShadow: "0 3px 12px rgba(239,68,68,0.45)", display: "flex", alignItems: "center", justifyContent: "center", color: "white" }}>
               <FileWarning size={20} />

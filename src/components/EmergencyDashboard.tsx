@@ -12,7 +12,7 @@ import dynamic from "next/dynamic";
 
 const MapViewer = dynamic(() => import("@/components/MapViewer"), { ssr: false });
 
-type TabType = "global_evac" | "local_evac" | "missing" | "history";
+type TabType = "global_evac" | "local_evac" | "missing" | "suspects" | "history";
 
 export default function EmergencyDashboard() {
   const { user } = useAuth();
@@ -44,6 +44,9 @@ export default function EmergencyDashboard() {
   const [uploading, setUploading] = useState(false);
   const [showMissingForm, setShowMissingForm] = useState(false);
   
+  const [suspects, setSuspects] = useState<any[]>([]);
+  const [selectedDashboardSuspect, setSelectedDashboardSuspect] = useState<any>(null);
+
   const [activeTab, setActiveTab] = useState<TabType>("local_evac");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -96,6 +99,17 @@ export default function EmergencyDashboard() {
       setEmergencyIncidents(allIncs.filter(inc => inc.status === "open"));
     });
 
+    const unsubSuspects = onSnapshot(collection(db, "suspicious_persons"), (snap) => {
+       const docs = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+       docs.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+       setSuspects(docs);
+       
+       setSelectedDashboardSuspect((prev: any) => {
+         if (!prev) return null;
+         return docs.find(s => s.id === prev.id) || prev;
+       });
+    });
+
     let unsubWorkplace = () => {};
     if (activeWorkplaceId) {
       unsubWorkplace = onSnapshot(doc(db, "workplaces", activeWorkplaceId), (snap) => {
@@ -115,6 +129,7 @@ export default function EmergencyDashboard() {
       unsubHistory();
       unsubShifts();
       unsubIncidents();
+      unsubSuspects();
       unsubWorkplace();
     };
   }, [user, activeWorkplaceId]);
@@ -535,6 +550,7 @@ export default function EmergencyDashboard() {
           {isSuperadmin && (
             <TabButton id="missing" icon={Eye} label="Pessoa Desaparecida" color="var(--color-text-secondary)" activeColor="#eab308" />
           )}
+          <TabButton id="suspects" icon={Search} label="Suspeitos" color="var(--color-text-secondary)" activeColor="#22c55e" />
           <TabButton id="history" icon={Clock} label="Histórico" color="var(--color-text-secondary)" activeColor="var(--color-primary)" />
         </div>
         <div style={{ display: "flex", gap: "1rem" }}>
@@ -767,6 +783,97 @@ export default function EmergencyDashboard() {
                 );
              })()}
           </div>
+         )}
+
+         {activeTab === "suspects" && (
+           <div className="animate-fade-in">
+             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+                <h2 style={{ fontSize: "1.15rem", fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--color-text-primary)" }}>
+                   Gestão de Suspeitos
+                </h2>
+             </div>
+             
+             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem", alignItems: "start" }}>
+               {/* List of Suspects */}
+               <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-lg)", padding: "1.5rem", border: "1px solid var(--color-border)" }}>
+                 <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.05rem" }}>Suspeitos Ativos ({suspects.length})</h3>
+                 {suspects.length === 0 ? (
+                   <p style={{ color: "var(--color-text-secondary)", fontSize: "0.9rem" }}>Nenhum suspeito ativo.</p>
+                 ) : (
+                   <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                     {suspects.map(sus => (
+                       <div key={sus.id} onClick={() => setSelectedDashboardSuspect(sus)} style={{ padding: "1rem", borderRadius: "var(--radius-md)", border: `1px solid ${selectedDashboardSuspect?.id === sus.id ? '#22c55e' : 'var(--color-border)'}`, background: selectedDashboardSuspect?.id === sus.id ? 'rgba(34, 197, 94, 0.05)' : 'var(--color-bg)', cursor: "pointer", display: "flex", gap: "1rem", alignItems: "center", transition: "all 0.2s" }}>
+                          {sus.photoUrl ? (
+                            <img src={sus.photoUrl} alt="Suspeito" style={{ width: "48px", height: "48px", objectFit: "cover", borderRadius: "var(--radius-sm)" }} />
+                          ) : (
+                            <div style={{ width: "48px", height: "48px", background: "var(--color-surface)", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-sm)", color: "var(--color-text-tertiary)" }}>
+                              <Search size={20} />
+                            </div>
+                          )}
+                          <div style={{ flex: 1, overflow: "hidden" }}>
+                            <p style={{ margin: "0 0 0.25rem 0", fontWeight: 600, fontSize: "0.95rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sus.description}</p>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "var(--color-text-secondary)" }}>
+                              <span>Visto em: {sus.initialLocation}</span>
+                              <span>{new Date(sus.createdAt).toLocaleTimeString("pt-PT", {hour: "2-digit", minute:"2-digit"})}</span>
+                            </div>
+                          </div>
+                       </div>
+                     ))}
+                   </div>
+                 )}
+               </div>
+
+               {/* Detail View */}
+               <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-lg)", padding: "1.5rem", border: "1px solid var(--color-border)", minHeight: "400px" }}>
+                 {!selectedDashboardSuspect ? (
+                   <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "var(--color-text-tertiary)" }}>
+                     <Search size={48} style={{ marginBottom: "1rem", opacity: 0.5 }} />
+                     <p>Selecione um suspeito para ver os detalhes</p>
+                   </div>
+                 ) : (
+                   <div>
+                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem" }}>
+                       <div>
+                         <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Detalhes do Suspeito</h3>
+                         <span style={{ fontSize: "0.85rem", color: "var(--color-text-secondary)" }}>Reportado por {selectedDashboardSuspect.vigiaName}</span>
+                       </div>
+                     </div>
+                     
+                     {selectedDashboardSuspect.photoUrl && (
+                       <img src={selectedDashboardSuspect.photoUrl} alt="Foto Suspeito" style={{ width: "100%", maxHeight: "300px", objectFit: "contain", borderRadius: "var(--radius-md)", marginBottom: "1.5rem", background: "var(--color-bg)" }} />
+                     )}
+                     
+                     <div style={{ background: "var(--color-bg)", padding: "1rem", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", marginBottom: "1.5rem" }}>
+                       <p style={{ margin: "0 0 1rem 0", fontWeight: 600 }}>{selectedDashboardSuspect.description}</p>
+                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", fontSize: "0.9rem" }}>
+                         <div><strong style={{ color: "var(--color-text-secondary)", display: "block", marginBottom: "0.25rem" }}>Localização Inicial</strong>{selectedDashboardSuspect.initialLocation}</div>
+                         <div><strong style={{ color: "var(--color-text-secondary)", display: "block", marginBottom: "0.25rem" }}>Direção</strong>{selectedDashboardSuspect.direction || "--"}</div>
+                       </div>
+                     </div>
+                     
+                     <h4 style={{ margin: "0 0 1rem 0", fontSize: "1rem" }}>Evolução da Ocorrência ({selectedDashboardSuspect.updates?.length || 0})</h4>
+                     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", borderLeft: "2px solid var(--color-border)", paddingLeft: "1.5rem", marginLeft: "0.5rem" }}>
+                       {(!selectedDashboardSuspect.updates || selectedDashboardSuspect.updates.length === 0) && (
+                         <span style={{ fontSize: "0.9rem", color: "var(--color-text-tertiary)" }}>Nenhuma atualização registada pelos vigias.</span>
+                       )}
+                       {selectedDashboardSuspect.updates?.map((u: any, i: number) => (
+                         <div key={i} style={{ position: "relative" }}>
+                           <div style={{ position: "absolute", left: "-1.85rem", top: "0.25rem", width: "12px", height: "12px", borderRadius: "50%", background: "var(--color-primary)", border: "2px solid var(--color-surface)" }} />
+                           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.5rem" }}>
+                             <span style={{ fontSize: "0.85rem", color: "var(--color-text-secondary)", fontWeight: 600 }}>{new Date(u.timestamp).toLocaleTimeString("pt-PT", {hour: "2-digit", minute:"2-digit"})}</span>
+                             <span style={{ fontSize: "0.85rem", fontWeight: 600 }}>{u.vigiaName}</span>
+                             <span style={{ fontSize: "0.75rem", background: "rgba(34, 197, 94, 0.1)", color: "#22c55e", padding: "0.2rem 0.5rem", borderRadius: "var(--radius-sm)", fontWeight: 700 }}>{u.type.toUpperCase()}</span>
+                           </div>
+                           {u.message && <p style={{ margin: 0, fontSize: "0.95rem", color: "var(--color-text-primary)" }}>{u.message}</p>}
+                           {u.photoUrl && <img src={u.photoUrl} alt="Atualização" style={{ width: "100%", maxWidth: "200px", borderRadius: "var(--radius-md)", marginTop: "0.75rem" }} />}
+                         </div>
+                       ))}
+                     </div>
+                   </div>
+                 )}
+               </div>
+             </div>
+           </div>
          )}
 
          {activeTab === "history" && (
