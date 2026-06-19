@@ -71,6 +71,7 @@ export default function CaptainSummaryTable() {
         vigiaId: selectedPersonId,
         message: notifMessage.trim(),
         read: false,
+        dismissed: false,
         createdAt: new Date().toISOString()
       });
 

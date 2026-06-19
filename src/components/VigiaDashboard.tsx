@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, updateDoc, getDoc, addDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, updateDoc, getDoc, addDoc, orderBy, limit } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useAuth } from "@/contexts/AuthContext";
 import { MapPin, Play, Square, Clock, Calendar, CheckCircle2, AlertTriangle, X, Bell, FileWarning, MessageCircle } from "lucide-react";
@@ -196,10 +196,21 @@ export default function VigiaDashboard() {
       setShifts(data);
       setLoading(false);
     });
-    const qNotifs = query(collection(db, "notifications"), where("vigiaId", "==", user.uid), where("read", "==", false));
+    const qNotifs = query(collection(db, "notifications"), where("vigiaId", "==", user.uid));
     const unsubNotifs = onSnapshot(qNotifs, (snapshot) => {
       const notifs: Notification[] = [];
-      snapshot.forEach(d => notifs.push({ id: d.id, ...d.data() } as Notification));
+      snapshot.forEach(d => {
+        const data = d.data();
+        // Skip explicitly dismissed, or legacy read notifications
+        if (data.dismissed === true || (data.dismissed === undefined && data.read === true)) return;
+        
+        notifs.push({ id: d.id, ...data } as Notification);
+
+        // Auto-mark as read (WhatsApp style ticks) as soon as app sees it
+        if (data.read === false) {
+          updateDoc(doc(db, "notifications", d.id), { read: true }).catch(console.error);
+        }
+      });
       notifs.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       setNotifications(notifs);
     });
@@ -244,8 +255,10 @@ export default function VigiaDashboard() {
     return () => clearInterval(interval);
   }, [shifts, endAlertFired]);
 
-  const markNotificationRead = async (id: string) => {
-    await updateDoc(doc(db, "notifications", id), { read: true });
+  const dismissNotification = async (id: string) => {
+    // Optimistic UI removal
+    setNotifications(prev => prev.filter(n => n.id !== id));
+    await updateDoc(doc(db, "notifications", id), { dismissed: true });
   };
 
   const viewMap = async (shift: Shift) => {
@@ -377,7 +390,7 @@ export default function VigiaDashboard() {
                 </div>
                 <p style={{ margin: 0, fontSize: "0.9rem", wordBreak: "break-word" }}>{n.message}</p>
               </div>
-              <button onClick={() => markNotificationRead(n.id)} style={{ background: "rgba(255,255,255,0.1)", border: "none", cursor: "pointer", borderRadius: "50%", padding: "0.3rem", color: "white", display: "flex", alignItems: "center", flexShrink: 0 }}>
+              <button onClick={() => dismissNotification(n.id)} style={{ background: "rgba(255,255,255,0.1)", border: "none", cursor: "pointer", borderRadius: "50%", padding: "0.3rem", color: "white", display: "flex", alignItems: "center", flexShrink: 0 }}>
                 <X size={15} />
               </button>
             </div>
