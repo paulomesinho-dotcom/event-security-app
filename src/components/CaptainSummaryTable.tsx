@@ -46,11 +46,15 @@ export default function CaptainSummaryTable() {
     if (!selectedPersonId) return;
     const q = query(
       collection(db, "notifications"), 
-      where("vigiaId", "==", selectedPersonId),
-      orderBy("createdAt", "asc")
+      where("vigiaId", "==", selectedPersonId)
     );
     const unsubscribe = onSnapshot(q, (snap) => {
       const notifs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
+      notifs.sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeA - timeB;
+      });
       setVigiaNotifications(notifs);
     });
     return () => unsubscribe();
