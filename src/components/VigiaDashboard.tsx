@@ -877,16 +877,16 @@ export default function VigiaDashboard() {
             <form onSubmit={handleCreateSuspect} style={{ padding: "1.25rem", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1.1rem" }}>
               <div>
                 <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem", fontWeight: 700, color: "#a855f7", marginBottom: "0.4rem", letterSpacing: "0.04em", textTransform: "uppercase" }}>👤 Descrição Física / Roupa <span style={{ color: "#ef4444" }}>*</span></label>
-                <textarea required rows={3} value={suspectDesc} onChange={(e) => setSuspectDesc(e.target.value)} placeholder="Ex: Homem, t-shirt azul, chapéu preto, altura média..." className="input-field" style={{ resize: "none", borderColor: suspectDesc ? "rgba(168,85,247,0.5)" : undefined }}></textarea>
+                <textarea required rows={3} value={suspectDesc} onChange={(e) => setSuspectDesc(e.target.value)} placeholder="Ex: Homem, t-shirt azul, chapéu preto, altura média..." className="input" style={{ resize: "none", borderColor: suspectDesc ? "rgba(168,85,247,0.5)" : undefined }}></textarea>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
                 <div>
                   <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem", fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>📍 Local Visto</label>
-                  <input type="text" value={suspectLocation} onChange={(e) => setSuspectLocation(e.target.value)} placeholder={activeWorkplace?.name || activeShift?.locatorName || "Desconhecido"} className="input-field" />
+                  <input type="text" value={suspectLocation} onChange={(e) => setSuspectLocation(e.target.value)} placeholder={activeWorkplace?.name || activeShift?.locatorName || "Desconhecido"} className="input" />
                 </div>
                 <div>
                   <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem", fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>🧭 Direção (Opcional)</label>
-                  <input type="text" value={suspectDirection} onChange={(e) => setSuspectDirection(e.target.value)} placeholder="Ex: Palco principal, saída norte..." className="input-field" />
+                  <input type="text" value={suspectDirection} onChange={(e) => setSuspectDirection(e.target.value)} placeholder="Ex: Palco principal, saída norte..." className="input" />
                 </div>
               </div>
               <div>
@@ -970,13 +970,13 @@ export default function VigiaDashboard() {
             {/* Update form */}
             <form onSubmit={handleAddSuspectUpdate} style={{ background: "var(--color-surface)", padding: "1rem", borderRadius: "var(--radius-lg)", border: "1px solid rgba(168,85,247,0.2)", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
               <h4 style={{ margin: 0, fontSize: "0.85rem", fontWeight: 700, color: "#a855f7", textTransform: "uppercase", letterSpacing: "0.04em" }}>Adicionar Atualização</h4>
-              <select value={updateType} onChange={(e) => setUpdateType(e.target.value)} className="input-field">
+              <select value={updateType} onChange={(e) => setUpdateType(e.target.value)} className="input">
                 <option value="avistamento">👀 Visto a passar / Novo Local</option>
                 <option value="abordagem">✋ Abordado / Identificado</option>
                 <option value="falso_alarme">❌ Falso Alarme (Fechar ocorrência)</option>
                 <option value="resolvido">✅ A pessoa foi embora (Fechar)</option>
               </select>
-              <textarea rows={2} value={updateMessage} onChange={(e) => setUpdateMessage(e.target.value)} placeholder={updateType === 'resolvido' || updateType === 'falso_alarme' ? "Descreva o desfecho (Obrigatório)" : "Detalhes adicionais (Opcional)"} className="input-field" style={{ resize: "none" }}></textarea>
+              <textarea rows={2} value={updateMessage} onChange={(e) => setUpdateMessage(e.target.value)} placeholder={updateType === 'resolvido' || updateType === 'falso_alarme' ? "Descreva o desfecho (Obrigatório)" : "Detalhes adicionais (Opcional)"} className="input" style={{ resize: "none" }}></textarea>
               
               <input type="file" accept="image/*" capture="environment" onChange={(e) => setUpdatePhoto(e.target.files?.[0] || null)} id="updatePhotoInput" style={{ display: "none" }} />
               <label htmlFor="updatePhotoInput" style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.6rem", background: updatePhoto ? "rgba(168,85,247,0.1)" : "var(--color-bg)", border: updatePhoto ? "1px solid #a855f7" : "1px dashed var(--color-border)", borderRadius: "var(--radius-md)", color: updatePhoto ? "#a855f7" : "var(--color-text-secondary)", cursor: "pointer", justifyContent: "center", fontSize: "0.85rem", fontWeight: 600 }}>
