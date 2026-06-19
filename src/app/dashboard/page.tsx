@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { LogOut, LayoutDashboard, Users, Map, Settings, Clock, MapPin, Building, Plus, Search, HelpCircle, Menu, ChevronDown, AlertTriangle, FileWarning } from "lucide-react";
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { updatePassword } from "firebase/auth";
+import { collection, query, where, getDocs, getDoc, doc } from "firebase/firestore";
 
 import Image from "next/image";
 import PlanUploader from "@/components/PlanUploader";
@@ -85,6 +86,37 @@ function WorkplaceSwitcher() {
   );
 }
 
+// Shows the active workplace name for the Vigia nav bar
+function VigiaWorkplaceName() {
+  const { user } = useAuth();
+  const [name, setName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user || user.role !== "vigia") return;
+    const fetchWorkplace = async () => {
+      try {
+        const q = query(collection(db, "shifts"), where("vigiaId", "==", user.uid), where("status", "in", ["pending", "active"]));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const shift = snap.docs[0].data();
+          if (shift.workplaceId) {
+            const wpDoc = await getDoc(doc(db, "workplaces", shift.workplaceId));
+            if (wpDoc.exists()) setName((wpDoc.data() as any).name);
+          }
+        }
+      } catch (_) {}
+    };
+    fetchWorkplace();
+  }, [user]);
+
+  if (!name) return null;
+  return (
+    <span style={{ fontSize: "0.72rem", color: "var(--color-text-secondary)", fontWeight: 500, marginTop: "0.1rem", display: "block" }}>
+      📍 {name}
+    </span>
+  );
+}
+
 export default function DashboardPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -144,16 +176,21 @@ export default function DashboardPage() {
       <div className="vigia-app-root">
         <EmergencyBanner />
         <nav className="vigia-app-nav" style={{ 
-          display: "flex", justifyContent: "space-between", padding: "0.75rem 1rem", 
+          display: "flex", justifyContent: "space-between", padding: "0.85rem 1rem", 
           backgroundColor: "var(--color-surface)", borderBottom: "1px solid var(--color-border)", alignItems: "center"
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <Image src="/logo.jpg" alt="Porto 2026 Logo" width={36} height={36} style={{ borderRadius: "var(--radius-md)", objectFit: "cover" }} />
-            <h1 style={{ fontSize: "1.1rem", color: "var(--color-primary)", fontWeight: 700, margin: 0 }}>Porto 2026</h1>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
+            <Image src="/logo.jpg" alt="Porto 2026 Logo" width={44} height={44} style={{ borderRadius: "var(--radius-md)", objectFit: "cover", flexShrink: 0 }} />
+            <div>
+              <h1 style={{ fontSize: "1.2rem", color: "var(--color-primary)", fontWeight: 800, margin: 0, lineHeight: 1.1 }}>Porto 2026</h1>
+              <VigiaWorkplaceName />
+            </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <span style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)" }}>{user.name}</span>
-            <button onClick={handleLogout} className="btn btn-secondary" style={{ padding: "0.35rem 0.6rem", fontSize: "0.8rem" }}><LogOut size={14} /></button>
+            <div style={{ textAlign: "right" }}>
+              <span style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", display: "block" }}>{user.name}</span>
+            </div>
+            <button onClick={handleLogout} className="btn btn-secondary" style={{ padding: "0.4rem 0.65rem", fontSize: "0.8rem" }}><LogOut size={15} /></button>
           </div>
         </nav>
         <VigiaDashboard />

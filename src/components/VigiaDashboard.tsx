@@ -473,23 +473,30 @@ export default function VigiaDashboard() {
       )}
 
       {showIncidentModal && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-          <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-lg)", width: "100%", maxWidth: "400px", overflow: "hidden" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1rem 1.5rem", borderBottom: "1px solid var(--color-border)", background: "#ef4444", color: "white" }}>
-              <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}><FileWarning size={18}/> Reportar Ocorrência</h3>
-              <button onClick={() => setShowIncidentModal(false)} style={{ background: "none", border: "none", color: "white", cursor: "pointer" }}><X size={20}/></button>
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.85)", zIndex: 10000, display: "flex", alignItems: "flex-end", justifyContent: "center", padding: 0 }}>
+          <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-lg) var(--radius-lg) 0 0", width: "100%", maxWidth: "600px", overflow: "hidden", maxHeight: "90dvh", display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1.25rem 1.5rem", background: "linear-gradient(135deg, #dc2626, #ef4444)", color: "white", flexShrink: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                <div style={{ background: "rgba(255,255,255,0.2)", padding: "0.5rem", borderRadius: "50%" }}><FileWarning size={20}/></div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800 }}>Reportar Ocorrência</h3>
+                  <p style={{ margin: 0, fontSize: "0.75rem", opacity: 0.8 }}>Será enviada ao Capitão imediatamente</p>
+                </div>
+              </div>
+              <button onClick={() => setShowIncidentModal(false)} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "white", cursor: "pointer", borderRadius: "50%", width: "34px", height: "34px", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={18}/></button>
             </div>
-            <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem", overflowY: "auto", flex: 1 }}>
               <div>
-                <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.5rem", fontWeight: 600 }}>Descrição da Ocorrência *</label>
-                <textarea rows={4} value={incidentText} onChange={e => setIncidentText(e.target.value)} placeholder="Descreva o que se está a passar..." style={{ width: "100%", padding: "0.5rem", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", resize: "none" }}></textarea>
+                <label style={{ display: "block", fontSize: "0.9rem", marginBottom: "0.5rem", fontWeight: 700 }}>Descrição da Ocorrência *</label>
+                <textarea rows={5} value={incidentText} onChange={e => setIncidentText(e.target.value)} placeholder="Descreva detalhadamente o que está a acontecer..." style={{ width: "100%", padding: "0.75rem", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", resize: "none", fontSize: "0.95rem", lineHeight: 1.5 }}></textarea>
               </div>
               <div>
-                <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.5rem", fontWeight: 600 }}>Anexar Fotografia (Opcional)</label>
-                <input type="file" accept="image/*" capture="environment" onChange={e => setIncidentPhoto(e.target.files?.[0] || null)} style={{ width: "100%" }} />
+                <label style={{ display: "block", fontSize: "0.9rem", marginBottom: "0.5rem", fontWeight: 700 }}>Fotografia (Opcional)</label>
+                <input type="file" accept="image/*" capture="environment" onChange={e => setIncidentPhoto(e.target.files?.[0] || null)} style={{ width: "100%", fontSize: "0.9rem" }} />
+                {incidentPhoto && <p style={{ margin: "0.35rem 0 0", fontSize: "0.75rem", color: "var(--color-success)" }}>✓ {incidentPhoto.name}</p>}
               </div>
-              <button onClick={submitIncident} disabled={incidentUploading || !incidentText} style={{ width: "100%", padding: "1rem", background: "#ef4444", color: "white", border: "none", borderRadius: "var(--radius-md)", fontWeight: 700, cursor: "pointer", opacity: incidentUploading || !incidentText ? 0.5 : 1 }}>
-                {incidentUploading ? "A ENVIAR..." : "ENVIAR RELATÓRIO AO CAPITÃO"}
+              <button onClick={submitIncident} disabled={incidentUploading || !incidentText} style={{ width: "100%", padding: "1.1rem", background: incidentUploading || !incidentText ? "#e5e7eb" : "linear-gradient(135deg, #dc2626, #ef4444)", color: incidentUploading || !incidentText ? "#9ca3af" : "white", border: "none", borderRadius: "var(--radius-md)", fontWeight: 800, cursor: incidentUploading || !incidentText ? "not-allowed" : "pointer", fontSize: "1rem", letterSpacing: "0.02em" }}>
+                {incidentUploading ? "⏳ A ENVIAR..." : "🚨 ENVIAR AO CAPITÃO"}
               </button>
             </div>
           </div>
@@ -498,24 +505,24 @@ export default function VigiaDashboard() {
 
       {showMapForShift && shiftPlanUrl && shiftLocator && (
         <div className="vigia-map-modal">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.85rem 1rem", background: "#151F31", color: "white", flexShrink: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", minWidth: 0 }}>
-              <div style={{ background: "rgba(255,255,255,0.1)", padding: "0.45rem", borderRadius: "var(--radius-md)", flexShrink: 0 }}>
-                <MapPin size={18} color="#a5b4fc" />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1rem 1.25rem", background: "#0d1b2a", color: "white", flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.85rem", minWidth: 0 }}>
+              <div style={{ background: "rgba(165,180,252,0.2)", padding: "0.6rem", borderRadius: "50%", flexShrink: 0 }}>
+                <MapPin size={22} color="#a5b4fc" />
               </div>
               <div style={{ minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", fontWeight: 600 }}>A SUA POSIÇÃO</p>
-                <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{shiftLocator.name}</h3>
+                <p style={{ margin: 0, fontSize: "0.75rem", color: "rgba(255,255,255,0.45)", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>A SUA POSIÇÃO</p>
+                <h2 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{shiftLocator.name}</h2>
               </div>
             </div>
-            <button onClick={() => setShowMapForShift(null)} style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 0.75rem", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "var(--radius-md)", color: "white", cursor: "pointer", fontWeight: 600, fontSize: "0.8rem", flexShrink: 0 }}>
-              <X size={15} /> Fechar
+            <button onClick={() => setShowMapForShift(null)} style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.6rem 1rem", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "var(--radius-full)", color: "white", cursor: "pointer", fontWeight: 600, fontSize: "0.85rem", flexShrink: 0 }}>
+              <X size={16} /> Fechar
             </button>
           </div>
 
           {showMapForShift.time && (
-            <div style={{ padding: "0.5rem 1rem", background: "rgba(21,31,49,0.85)", color: "rgba(255,255,255,0.6)", fontSize: "0.78rem", display: "flex", gap: "1.25rem", flexShrink: 0, flexWrap: "wrap" }}>
-              {showMapForShift.name && <span>📋 {showMapForShift.name}</span>}
+            <div style={{ padding: "0.65rem 1.25rem", background: "rgba(13,27,42,0.9)", color: "rgba(255,255,255,0.65)", fontSize: "0.85rem", display: "flex", gap: "1.5rem", flexShrink: 0, flexWrap: "wrap", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+              {showMapForShift.name && <span style={{ fontWeight: 600 }}>📋 {showMapForShift.name}</span>}
               <span>🕐 {showMapForShift.time}</span>
               {showMapForShift.days && <span>📅 {showMapForShift.days}</span>}
             </div>
@@ -569,27 +576,42 @@ export default function VigiaDashboard() {
       `}</style>
     </div>
 
-    {/* BOTTOM NAVIGATION BAR — flex sibling of main scroll area */}
+    {/* BOTTOM NAVIGATION BAR — flex sibling of scrollable content */}
     <div className="vigia-app-bottom-bar">
       {activeShift && (
         <>
           {zelloLink && (
-            <a href={zelloLink} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.25rem", background: "rgba(249, 115, 22, 0.15)", color: "#f97316", padding: "0.5rem", borderRadius: "var(--radius-md)", textDecoration: "none", fontWeight: 600, fontSize: "0.7rem", border: "1px solid rgba(249, 115, 22, 0.3)", flex: "1 0 auto", minWidth: "65px" }}>
-              <Play size={18} fill="currentColor" /> Rádio
+            <a href={zelloLink} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.3rem", textDecoration: "none", flex: "1 0 auto" }}>
+              <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: "rgba(249, 115, 22, 0.15)", border: "1.5px solid rgba(249,115,22,0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "#f97316" }}>
+                <Play size={20} fill="currentColor" />
+              </div>
+              <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "#f97316" }}>Rádio</span>
             </a>
           )}
           {whatsappLink && (
-            <a href={whatsappLink} target="_blank" rel="noopener noreferrer" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.25rem", background: "rgba(34, 197, 94, 0.15)", color: "#22c55e", padding: "0.5rem", borderRadius: "var(--radius-md)", textDecoration: "none", fontWeight: 600, fontSize: "0.7rem", border: "1px solid rgba(34, 197, 94, 0.3)", flex: "1 0 auto", minWidth: "65px" }}>
-              <MessageCircle size={18} fill="currentColor" /> Chat
+            <a href={whatsappLink} target="_blank" rel="noopener noreferrer" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.3rem", textDecoration: "none", flex: "1 0 auto" }}>
+              <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: "rgba(34, 197, 94, 0.15)", border: "1.5px solid rgba(34,197,94,0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "#22c55e" }}>
+                <MessageCircle size={20} fill="currentColor" />
+              </div>
+              <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "#22c55e" }}>Chat</span>
             </a>
           )}
-          <button onClick={() => setShowIncidentModal(true)} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.25rem", background: "#ef4444", color: "white", padding: "0.5rem", borderRadius: "var(--radius-md)", border: "none", fontWeight: 600, fontSize: "0.7rem", flex: "1 0 auto", minWidth: "65px", cursor: "pointer", boxShadow: "0 2px 8px rgba(239,68,68,0.3)" }}>
-            <FileWarning size={18} /> Ocorrência
+          <button onClick={() => setShowIncidentModal(true)} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.3rem", background: "none", border: "none", cursor: "pointer", flex: "1 0 auto" }}>
+            <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: "linear-gradient(135deg, #dc2626, #ef4444)", boxShadow: "0 3px 12px rgba(239,68,68,0.45)", display: "flex", alignItems: "center", justifyContent: "center", color: "white" }}>
+              <FileWarning size={20} />
+            </div>
+            <span style={{ fontSize: "0.65rem", fontWeight: 700, color: "#ef4444" }}>Ocorrência</span>
           </button>
         </>
       )}
-      <button onClick={() => setShowHistoryModal(true)} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.25rem", background: "transparent", color: "var(--color-text-secondary)", padding: "0.5rem", borderRadius: "var(--radius-md)", border: "none", fontWeight: 600, fontSize: "0.7rem", flex: "1 0 auto", minWidth: "65px", cursor: "pointer" }}>
-        <Clock size={18} /> {myIncidents.length > 0 ? `(${myIncidents.length}) Histórico` : `Histórico`}
+      <button onClick={() => setShowHistoryModal(true)} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.3rem", background: "none", border: "none", cursor: "pointer", flex: "1 0 auto" }}>
+        <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: myIncidents.length > 0 ? "rgba(99,102,241,0.15)" : "var(--color-bg)", border: myIncidents.length > 0 ? "1.5px solid rgba(99,102,241,0.4)" : "1.5px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "center", color: myIncidents.length > 0 ? "#6366f1" : "var(--color-text-secondary)", position: "relative" }}>
+          <Clock size={20} />
+          {myIncidents.length > 0 && (
+            <span style={{ position: "absolute", top: "-3px", right: "-3px", background: "#6366f1", color: "white", borderRadius: "50%", width: "18px", height: "18px", fontSize: "0.6rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{myIncidents.length}</span>
+          )}
+        </div>
+        <span style={{ fontSize: "0.65rem", fontWeight: 600, color: myIncidents.length > 0 ? "#6366f1" : "var(--color-text-secondary)" }}>Histórico</span>
       </button>
     </div>
     </>
