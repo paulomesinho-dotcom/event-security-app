@@ -172,6 +172,7 @@ export default function VigiaDashboard() {
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [fcmBanner, setFcmBanner] = useState<string | null>(null);
+  const [showNotifPrompt, setShowNotifPrompt] = useState(false);
   const [showMapForShift, setShowMapForShift] = useState<Shift | null>(null);
   const [shiftPlanUrl, setShiftPlanUrl] = useState<string>("");
   const [shiftLocator, setShiftLocator] = useState<Locator | null>(null);
@@ -202,7 +203,14 @@ export default function VigiaDashboard() {
       notifs.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       setNotifications(notifs);
     });
-    requestNotificationPermission(user.uid);
+
+    if (typeof window !== "undefined" && "Notification" in window) {
+      if (Notification.permission === "default") {
+        setShowNotifPrompt(true);
+      } else if (Notification.permission === "granted") {
+        requestNotificationPermission(user.uid);
+      }
+    }
 
     const unsubFcm = onForegroundMessage((payload) => {
       const msg = payload.notification?.body || payload.data?.message || "Nova mensagem do Capitão";
@@ -326,6 +334,30 @@ export default function VigiaDashboard() {
           </div>
           <button onClick={() => setFcmBanner(null)} style={{ background: "rgba(255,255,255,0.1)", border: "none", cursor: "pointer", borderRadius: "50%", padding: "0.3rem", color: "white", display: "flex", alignItems: "center", flexShrink: 0 }}>
             <X size={15} />
+          </button>
+        </div>
+      )}
+
+      {showNotifPrompt && (
+        <div style={{ marginBottom: "1rem", padding: "1rem", background: "var(--color-primary-light)", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-primary)", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+            <Bell size={20} color="var(--color-primary)" />
+            <h4 style={{ margin: 0, color: "var(--color-text-primary)" }}>Ative as Notificações</h4>
+          </div>
+          <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>
+            Para receber avisos imediatos do seu Capitão mesmo com a app fechada, ative as notificações push.
+          </p>
+          <button 
+            className="btn btn-primary" 
+            style={{ width: "100%", padding: "0.5rem" }}
+            onClick={() => {
+              requestNotificationPermission(user.uid).then(token => {
+                if (token) setShowNotifPrompt(false);
+                else alert("Para ativar, poderá ter de adicionar a App ao ecrã inicial primeiro (no iPhone: Partilhar -> Adicionar ao Ecrã Principal).");
+              });
+            }}
+          >
+            Ativar Notificações
           </button>
         </div>
       )}
