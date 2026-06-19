@@ -341,6 +341,24 @@ export default function VigiaDashboard() {
                   </div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "0.5rem" }}>
+                  {activeShift.name && (
+                    <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "var(--radius-md)", padding: "0.6rem 0.75rem" }}>
+                      <p style={{ margin: 0, fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.15rem", fontWeight: 600 }}>DESIGNAÇÃO</p>
+                      <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 600 }}>{activeShift.name}</p>
+                    </div>
+                  )}
+                  {activeShift.time && (
+                    <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "var(--radius-md)", padding: "0.6rem 0.75rem" }}>
+                      <p style={{ margin: 0, fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.15rem", fontWeight: 600 }}>HORÁRIO</p>
+                      <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 600 }}>{activeShift.time}</p>
+                    </div>
+                  )}
+                  {activeShift.days && (
+                    <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "var(--radius-md)", padding: "0.6rem 0.75rem" }}>
+                      <p style={{ margin: 0, fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.15rem", fontWeight: 600 }}>DATA</p>
+                      <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 600 }}>{activeShift.days}</p>
+                    </div>
+                  )}
                   <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "var(--radius-md)", padding: "0.6rem 0.75rem" }}>
                     <p style={{ margin: 0, fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.15rem", fontWeight: 600 }}>INICIADO</p>
                     <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 600 }}>{new Date(activeShift.startTime).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}</p>
@@ -363,12 +381,44 @@ export default function VigiaDashboard() {
                       <div style={{ height: "3px", background: timeCheck.allowed ? "linear-gradient(90deg, #10b981, #34d399)" : "linear-gradient(90deg, #f59e0b, #fbbf24)" }} />
                       <div style={{ padding: "1rem 1.1rem" }}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.6rem" }}>
-                          <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700 }}>{shift.locatorName}</h4>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+                            <MapPin size={16} color="var(--color-primary)" style={{ flexShrink: 0 }} />
+                            <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700 }}>{shift.locatorName}</h4>
+                          </div>
                           <StatusBadge status="pending" />
                         </div>
-                        <button onClick={() => updateShiftStatus(shift, "active")} disabled={disabled} style={{ width: "100%", padding: "0.6rem", fontSize: "0.85rem", fontWeight: 700, border: "none", borderRadius: "var(--radius-md)", cursor: disabled ? "not-allowed" : "pointer", background: disabled ? "#e5e7eb" : "#10b981", color: disabled ? "#6b7280" : "white" }}>
-                          <Play size={14} fill="currentColor" style={{ display: "inline-block", marginRight: "0.3rem" }} /> Iniciar Turno
-                        </button>
+
+                        {/* Hora de início destacada */}
+                        {startTime && (
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.5rem", background: "var(--color-primary-light)", padding: "0.3rem 0.7rem", borderRadius: "var(--radius-md)" }}>
+                            <Clock size={13} color="var(--color-primary)" />
+                            <span style={{ fontSize: "0.88rem", fontWeight: 700, color: "var(--color-primary)" }}>Início: {startTime}</span>
+                          </div>
+                        )}
+
+                        {/* Meta info */}
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem 0.9rem", marginBottom: "0.75rem" }}>
+                          {shift.name && <span style={{ fontSize: "0.78rem", color: "var(--color-text-secondary)" }}>{shift.name}</span>}
+                          {shift.days && <span style={{ fontSize: "0.78rem", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "0.2rem" }}><Calendar size={11} />{shift.days}</span>}
+                          {shift.time && <span style={{ fontSize: "0.78rem", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "0.2rem" }}><Clock size={11} />{shift.time}</span>}
+                        </div>
+
+                        {/* Restriction warning */}
+                        {!timeCheck.allowed && (
+                          <div style={{ display: "flex", alignItems: "flex-start", gap: "0.4rem", padding: "0.5rem 0.65rem", background: "rgba(245,158,11,0.08)", borderRadius: "var(--radius-md)", marginBottom: "0.75rem" }}>
+                            <AlertTriangle size={13} color="#d97706" style={{ flexShrink: 0, marginTop: "0.1rem" }} />
+                            <span style={{ fontSize: "0.76rem", color: "#d97706", fontWeight: 500 }}>{timeCheck.reason}</span>
+                          </div>
+                        )}
+
+                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                          <button onClick={() => viewMap(shift)} className="btn btn-secondary" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35rem", fontSize: "0.82rem", padding: "0.5rem" }}>
+                            <MapPin size={14} /> Planta
+                          </button>
+                          <button onClick={() => updateShiftStatus(shift, "active")} disabled={disabled} style={{ flex: 2, padding: "0.6rem", fontSize: "0.85rem", fontWeight: 700, border: "none", borderRadius: "var(--radius-md)", cursor: disabled ? "not-allowed" : "pointer", background: disabled ? "#e5e7eb" : "#10b981", color: disabled ? "#6b7280" : "white" }}>
+                            <Play size={14} fill="currentColor" style={{ display: "inline-block", marginRight: "0.3rem" }} /> Iniciar Turno
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
