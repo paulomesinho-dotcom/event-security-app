@@ -20,7 +20,7 @@ import ShiftModelManager from "@/components/ShiftModelManager";
 import LocationManager from "@/components/LocationManager";
 import SettingsModal from "@/components/SettingsModal";
 import EmergencyBanner from "@/components/EmergencyBanner";
-import EmergencyControl from "@/components/EmergencyControl";
+import EmergencyDashboard from "@/components/EmergencyDashboard";
 import IncidentManager from "@/components/IncidentManager";
 import { useWorkplace } from "@/contexts/WorkplaceContext";
 
@@ -260,6 +260,7 @@ export default function DashboardPage() {
               <NavItem id="workplaces" icon={Building} label="Workplaces" />
               <NavItem id="users" icon={Users} label="Gestão de Acessos" />
               <NavItem id="global_plans" icon={Map} label="Biblioteca de Plantas" />
+              <NavItem id="emergency" icon={AlertTriangle} label="Painel de Emergência" />
               
               <div style={{ height: "1px", background: "rgba(255,255,255,0.1)", margin: "0.5rem 1rem" }} />
               <div style={{ padding: "0.25rem 1rem", fontSize: "0.65rem", color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>Workplace Atual</div>
@@ -273,6 +274,7 @@ export default function DashboardPage() {
               <NavItem id="locations" icon={MapPin} label="Estrutura de Locais" />
               <NavItem id="plans" icon={Map} label="Plantas & Escalas" />
               <NavItem id="incidents" icon={FileWarning} label="Ocorrências" />
+              <NavItem id="emergency" icon={AlertTriangle} label="Painel de Emergência" />
               <div style={{ height: "1px", background: "rgba(255,255,255,0.1)", margin: "0.5rem 1rem" }} />
               <NavItem id="summary" icon={LayoutDashboard} label="Resumo Global" />
             </>
@@ -312,7 +314,6 @@ export default function DashboardPage() {
 
           {/* User Actions Right */}
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <EmergencyControl />
             <HelpCircle size={24} color="var(--color-text-secondary)" style={{ cursor: "pointer", display: "none" }} className="hidden-mobile" />
             {user?.role === "superadmin" && (
               <div title="Configurações Globais" style={{ display: "flex", alignItems: "center" }}>
@@ -369,6 +370,7 @@ export default function DashboardPage() {
                 {activeTab === "models" && <ShiftModelManager />}
                 {activeTab === "locations" && <LocationManager />}
                 {activeTab === "incidents" && <IncidentManager />}
+                {activeTab === "emergency" && <EmergencyDashboard />}
                 
                 {activeTab === "plans" && (
                   <div>
