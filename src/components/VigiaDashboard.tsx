@@ -55,6 +55,9 @@ interface Shift {
   id: string;
   locatorId: string;
   locatorName: string;
+  local?: string;
+  sublocal?: string;
+  subsublocal?: string;
   planId: string;
   status: "pending" | "active" | "completed";
   startTime: string;
@@ -192,7 +195,10 @@ export default function VigiaDashboard() {
   const [showNewSuspectModal, setShowNewSuspectModal] = useState(false);
   const [selectedSuspect, setSelectedSuspect] = useState<any>(null);
   
-  const [suspectLocation, setSuspectLocation] = useState("");
+  const [suspectLocal, setSuspectLocal] = useState("");
+  const [suspectSublocal, setSuspectSublocal] = useState("");
+  const [suspectSubsublocal, setSuspectSubsublocal] = useState("");
+  const [activeShiftLocation, setActiveShiftLocation] = useState<{local: string, sublocal: string, subsublocal: string} | null>(null);
   const [suspectDirection, setSuspectDirection] = useState("");
   const [suspectDesc, setSuspectDesc] = useState("");
   const [suspectPhoto, setSuspectPhoto] = useState<File | null>(null);
@@ -318,6 +324,33 @@ export default function VigiaDashboard() {
   const activeShift = shifts.find(s => s.status === "active");
   const activeWorkplace = activeShift ? workplaces.find(w => w.planIds?.includes(activeShift.planId)) : null;
 
+  useEffect(() => {
+    const fetchLocationData = async () => {
+      if (activeShift?.locatorId) {
+        try {
+          const locDoc = await getDoc(doc(db, "locators", activeShift.locatorId));
+          if (locDoc.exists()) {
+             const locData = locDoc.data();
+             if (locData.locationId) {
+                const absDoc = await getDoc(doc(db, "abstract_locations", locData.locationId));
+                if (absDoc.exists()) {
+                   const absData = absDoc.data();
+                   setActiveShiftLocation({
+                      local: absData.local || "",
+                      sublocal: absData.sublocal || "",
+                      subsublocal: absData.subsublocal || ""
+                   });
+                   return;
+                }
+             }
+          }
+        } catch(e) { console.error("Error fetching location data", e); }
+      }
+      setActiveShiftLocation(null);
+    };
+    fetchLocationData();
+  }, [activeShift?.locatorId]);
+
   const submitIncident = async () => {
     if (!activeShift) return alert("Precisa de ter um turno ativo para reportar ocorrências.");
     if (!incidentText) return alert("Descreva a ocorrência.");
@@ -353,10 +386,29 @@ export default function VigiaDashboard() {
     }
   };
 
+  const getGPSLocation = (): Promise<{lat: number, lng: number} | null> => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) return resolve(null);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        (err) => { 
+          console.error("GPS Error:", err); 
+          resolve(null); 
+        },
+        { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
+      );
+    });
+  };
+
   const handleCreateSuspect = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!suspectDesc) return alert("Por favor, descreva o suspeito.");
     setSuspectUploading(true);
+    
+    const gps = await getGPSLocation();
+    if (!gps) {
+      alert("Não foi possível obter a sua localização exata para o mapa. O suspeito será registado na mesma.");
+    }
     let photoUrl = "";
     if (suspectPhoto) {
       try {
@@ -374,10 +426,15 @@ export default function VigiaDashboard() {
       await addDoc(collection(db, "suspicious_persons"), {
         vigiaId: user?.uid,
         vigiaName: user?.name || user?.email || "Vigia",
-        initialLocation: suspectLocation || activeWorkplace?.name || activeShift?.locatorName || "Desconhecido",
+        initialLocation: [suspectLocal, suspectSublocal, suspectSubsublocal].filter(Boolean).join(" - ") || "Desconhecido",
+        local: suspectLocal,
+        sublocal: suspectSublocal,
+        subsublocal: suspectSubsublocal,
         direction: suspectDirection,
         description: suspectDesc,
         photoUrl,
+        lat: gps?.lat || null,
+        lng: gps?.lng || null,
         status: "active",
         createdAt: new Date().toISOString(),
         updates: []
@@ -385,7 +442,9 @@ export default function VigiaDashboard() {
       setShowNewSuspectModal(false);
       setSuspectDesc("");
       setSuspectDirection("");
-      setSuspectLocation("");
+      setSuspectLocal("");
+      setSuspectSublocal("");
+      setSuspectSubsublocal("");
       setSuspectPhoto(null);
     } catch (error) {
       console.error(error);
@@ -416,12 +475,18 @@ export default function VigiaDashboard() {
 
     try {
       const isClosing = updateType === "resolvido" || updateType === "falso_alarme";
+      const gps = await getGPSLocation();
+      if (!gps && !isClosing) {
+         alert("Localização não obtida, mas a atualização será gravada na mesma.");
+      }
       const newUpdate = {
         timestamp: new Date().toISOString(),
         vigiaName: user?.name || user?.email || "Vigia",
         type: updateType,
         message: updateMessage,
-        photoUrl
+        photoUrl,
+        lat: gps?.lat || null,
+        lng: gps?.lng || null
       };
 
       const docRef = doc(db, "suspicious_persons", selectedSuspect.id);
@@ -574,7 +639,20 @@ export default function VigiaDashboard() {
                       <p style={{ margin: 0, fontSize: "0.65rem", color: "rgba(255,255,255,0.45)", fontWeight: 600, letterSpacing: "0.05em" }}>
                         {activeWorkplace ? `${activeWorkplace.name.toUpperCase()} - ` : ""}POSIÇÃO ATUAL
                       </p>
-                      <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{activeShift.locatorName}</h3>
+                      {activeShiftLocation ? (
+                        <>
+                          <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {activeShiftLocation.local || activeShift.locatorName}
+                          </h3>
+                          {(activeShiftLocation.sublocal || activeShiftLocation.subsublocal) && (
+                            <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.85rem", color: "rgba(255,255,255,0.7)", fontWeight: 600 }}>
+                              {[activeShiftLocation.sublocal, activeShiftLocation.subsublocal].filter(Boolean).join(" - ")}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{activeShift.locatorName}</h3>
+                      )}
                     </div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", flexShrink: 0 }}>
@@ -629,7 +707,16 @@ export default function VigiaDashboard() {
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.6rem" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
                             <MapPin size={16} color="var(--color-primary)" style={{ flexShrink: 0 }} />
-                            <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700 }}>{shift.locatorName}</h4>
+                            <div>
+                              <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700 }}>
+                                {shift.local || shift.locatorName}
+                              </h4>
+                              {(shift.sublocal || shift.subsublocal) && (
+                                <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.75rem", color: "var(--color-text-secondary)" }}>
+                                  {[shift.sublocal, shift.subsublocal].filter(Boolean).join(" - ")}
+                                </p>
+                              )}
+                            </div>
                           </div>
                           <StatusBadge status="pending" />
                         </div>
@@ -799,7 +886,7 @@ export default function VigiaDashboard() {
       {/* Modals for Suspicious Persons */}
       
       {showSuspectsList && !showNewSuspectModal && !selectedSuspect && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--color-bg)", zIndex: 9000, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ position: "fixed", top: "60px", left: 0, right: 0, bottom: 0, background: "var(--color-bg)", zIndex: 9000, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           {/* Header with gradient */}
           <div style={{ background: "linear-gradient(135deg, #1e0a3c, #2d1060)", padding: "1.25rem 1.5rem", borderBottom: "1px solid rgba(168,85,247,0.3)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
@@ -815,7 +902,12 @@ export default function VigiaDashboard() {
           </div>
           <div style={{ padding: "1rem", flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.75rem", paddingBottom: "3rem" }}>
             <button 
-              onClick={() => setShowNewSuspectModal(true)}
+              onClick={() => {
+                setSuspectLocal(activeShiftLocation?.local || activeWorkplace?.name || activeShift?.locatorName || "");
+                setSuspectSublocal(activeShiftLocation?.sublocal || "");
+                setSuspectSubsublocal(activeShiftLocation?.subsublocal || "");
+                setShowNewSuspectModal(true);
+              }}
               style={{ padding: "1rem 1.25rem", background: "linear-gradient(135deg, #7c3aed, #a855f7)", color: "white", border: "none", borderRadius: "var(--radius-md)", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", fontSize: "0.95rem", boxShadow: "0 4px 16px rgba(168,85,247,0.4)" }}>
               <Crosshair size={20} /> DETETADO SUSPEITO
             </button>
@@ -859,8 +951,8 @@ export default function VigiaDashboard() {
       )}
 
       {showNewSuspectModal && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.85)", zIndex: 9001, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-          <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-lg) var(--radius-lg) 0 0", width: "100%", maxWidth: "480px", display: "flex", flexDirection: "column", maxHeight: "92vh", overflow: "hidden" }}>
+        <div style={{ position: "fixed", top: "60px", left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.85)", zIndex: 10001, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+          <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-lg) var(--radius-lg) 0 0", width: "100%", maxWidth: "480px", display: "flex", flexDirection: "column", height: "calc(100% - 20px)", maxHeight: "100%", overflow: "hidden" }}>
             {/* Purple gradient header */}
             <div style={{ background: "linear-gradient(135deg, #1e0a3c, #2d1060)", padding: "1.25rem 1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
@@ -876,24 +968,31 @@ export default function VigiaDashboard() {
             </div>
             <form onSubmit={handleCreateSuspect} style={{ padding: "1.25rem", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1.1rem" }}>
               <div>
-                <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem", fontWeight: 700, color: "#a855f7", marginBottom: "0.4rem", letterSpacing: "0.04em", textTransform: "uppercase" }}>👤 Descrição Física / Roupa <span style={{ color: "#ef4444" }}>*</span></label>
+                <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem", fontWeight: 700, color: "#a855f7", marginBottom: "0.4rem", letterSpacing: "0.04em", textTransform: "uppercase" }}>Descrição Física / Roupa *</label>
                 <textarea required rows={3} value={suspectDesc} onChange={(e) => setSuspectDesc(e.target.value)} placeholder="Ex: Homem, t-shirt azul, chapéu preto, altura média..." className="input" style={{ resize: "none", borderColor: suspectDesc ? "rgba(168,85,247,0.5)" : undefined }}></textarea>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
                 <div>
-                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem", fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>📍 Local Visto</label>
-                  <input type="text" value={suspectLocation} onChange={(e) => setSuspectLocation(e.target.value)} placeholder={activeWorkplace?.name || activeShift?.locatorName || "Desconhecido"} className="input" />
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem", fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Local</label>
+                  <input type="text" value={suspectLocal} onChange={(e) => setSuspectLocal(e.target.value)} placeholder="Ex: Recinto Principal" className="input" />
                 </div>
                 <div>
-                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem", fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>🧭 Direção (Opcional)</label>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem", fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Sub Local (Opcional)</label>
+                  <input type="text" value={suspectSublocal} onChange={(e) => setSuspectSublocal(e.target.value)} placeholder="Ex: Porta Sul" className="input" />
+                </div>
+                <div>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem", fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Sub Sub Local (Opcional)</label>
+                  <input type="text" value={suspectSubsublocal} onChange={(e) => setSuspectSubsublocal(e.target.value)} placeholder="Ex: Catraca 3" className="input" />
+                </div>
+                <div>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem", fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Direção (Opcional)</label>
                   <input type="text" value={suspectDirection} onChange={(e) => setSuspectDirection(e.target.value)} placeholder="Ex: Palco principal, saída norte..." className="input" />
                 </div>
               </div>
               <div>
-                <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem", fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>📷 Fotografia (Opcional)</label>
+                <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem", fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Fotografia (Opcional)</label>
                 <input type="file" accept="image/*" capture="environment" onChange={(e) => setSuspectPhoto(e.target.files?.[0] || null)} id="suspectPhotoInput" style={{ display: "none" }} />
                 <label htmlFor="suspectPhotoInput" style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.75rem", background: suspectPhoto ? "rgba(168,85,247,0.1)" : "var(--color-bg)", border: suspectPhoto ? "1px solid #a855f7" : "1px dashed var(--color-border)", borderRadius: "var(--radius-md)", color: suspectPhoto ? "#a855f7" : "var(--color-text-secondary)", cursor: "pointer", justifyContent: "center", fontWeight: 600 }}>
-                  <Camera size={18} />
                   {suspectPhoto ? "✓ Fotografia Pronta" : "Tirar Foto / Escolher da Galeria"}
                 </label>
               </div>
@@ -907,8 +1006,7 @@ export default function VigiaDashboard() {
       )}
 
       {selectedSuspect && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--color-bg)", zIndex: 9002, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          {/* Purple header */}
+        <div style={{ position: "fixed", top: "60px", left: 0, right: 0, bottom: 0, background: "var(--color-bg)", zIndex: 9002, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={{ background: "linear-gradient(135deg, #1e0a3c, #2d1060)", padding: "1.25rem 1.5rem", borderBottom: "1px solid rgba(168,85,247,0.3)", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
               <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "rgba(168,85,247,0.25)", border: "1.5px solid rgba(168,85,247,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -921,60 +1019,65 @@ export default function VigiaDashboard() {
             </div>
             <button onClick={() => setSelectedSuspect(null)} style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "white", cursor: "pointer", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={18}/></button>
           </div>
-          <div style={{ flex: 1, overflowY: "auto", padding: "1rem", display: "flex", flexDirection: "column", gap: "1rem", paddingBottom: "2rem" }}>
-            {/* Suspect details card */}
-            <div style={{ background: "var(--color-surface)", padding: "1.25rem", borderRadius: "var(--radius-lg)", border: "1px solid rgba(168,85,247,0.2)" }}>
-              <p style={{ margin: "0 0 1rem 0", fontSize: "1.05rem", fontWeight: 700, lineHeight: 1.4 }}>{selectedSuspect.description}</p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", fontSize: "0.85rem" }}>
-                <div style={{ background: "var(--color-bg)", padding: "0.6rem 0.8rem", borderRadius: "var(--radius-md)", borderLeft: "3px solid #a855f7" }}>
-                  <p style={{ margin: "0 0 0.15rem 0", fontSize: "0.65rem", color: "#a855f7", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>📍 Local Inicial</p>
-                  <p style={{ margin: 0, color: "var(--color-text-primary)", fontWeight: 600 }}>{selectedSuspect.initialLocation}</p>
-                </div>
-                <div style={{ background: "var(--color-bg)", padding: "0.6rem 0.8rem", borderRadius: "var(--radius-md)", borderLeft: "3px solid rgba(168,85,247,0.4)" }}>
-                  <p style={{ margin: "0 0 0.15rem 0", fontSize: "0.65rem", color: "var(--color-text-tertiary)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>🧭 Direção</p>
-                  <p style={{ margin: 0, color: "var(--color-text-primary)", fontWeight: 600 }}>{selectedSuspect.direction || "—"}</p>
-                </div>
-                <div style={{ background: "var(--color-bg)", padding: "0.6rem 0.8rem", borderRadius: "var(--radius-md)", borderLeft: "3px solid rgba(168,85,247,0.4)", gridColumn: "1 / -1" }}>
-                  <p style={{ margin: "0 0 0.15rem 0", fontSize: "0.65rem", color: "var(--color-text-tertiary)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>⏱ Detetado às</p>
-                  <p style={{ margin: 0, color: "var(--color-text-primary)", fontWeight: 600 }}>{new Date(selectedSuspect.createdAt).toLocaleTimeString("pt-PT", {hour: "2-digit", minute:"2-digit"})}</p>
-                </div>
-              </div>
-              {selectedSuspect.photoUrl && (
-                <img src={selectedSuspect.photoUrl} alt="Suspeito" style={{ width: "100%", maxHeight: "220px", objectFit: "contain", borderRadius: "var(--radius-md)", marginTop: "1rem", background: "var(--color-bg)" }} />
-              )}
-            </div>
-
-            {/* Timeline */}
-            <div>
-              <h4 style={{ margin: "0 0 0.75rem 0", fontSize: "0.85rem", fontWeight: 700, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Histórico de Atualizações</h4>
-              <div style={{ display: "flex", flexDirection: "column", gap: "1rem", borderLeft: "2px solid rgba(168,85,247,0.3)", paddingLeft: "1rem", marginLeft: "0.5rem" }}>
-                {(!selectedSuspect.updates || selectedSuspect.updates.length === 0) && (
-                  <span style={{ fontSize: "0.85rem", color: "var(--color-text-tertiary)" }}>Nenhuma atualização ainda.</span>
+          <div style={{ padding: "1.25rem", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+              <div style={{ background: "rgba(168,85,247,0.05)", padding: "1rem", borderRadius: "var(--radius-lg)", border: "1px solid rgba(168,85,247,0.2)" }}>
+                {selectedSuspect.photoUrl && (
+                  <img src={selectedSuspect.photoUrl} alt="Suspeito" style={{ width: "100%", maxHeight: "300px", objectFit: "cover", borderRadius: "var(--radius-md)", marginBottom: "1rem" }} />
                 )}
-                {selectedSuspect.updates?.map((u: any, i: number) => (
-                  <div key={i} style={{ position: "relative" }}>
-                    <div style={{ position: "absolute", left: "-1.35rem", top: "0.3rem", width: "10px", height: "10px", borderRadius: "50%", background: "#a855f7", border: "2px solid var(--color-bg)" }} />
-                    <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-md)", padding: "0.75rem 1rem", border: "1px solid var(--color-border)" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
-                        <span style={{ fontSize: "0.7rem", background: "rgba(168,85,247,0.1)", color: "#a855f7", padding: "0.15rem 0.5rem", borderRadius: "999px", fontWeight: 700, textTransform: "uppercase" }}>{u.type.replace("_", " ")}</span>
-                        <span style={{ fontSize: "0.7rem", color: "var(--color-text-tertiary)" }}>{new Date(u.timestamp).toLocaleTimeString("pt-PT", {hour: "2-digit", minute:"2-digit"})} · {u.vigiaName}</span>
-                      </div>
-                      {u.message && <p style={{ margin: 0, fontSize: "0.9rem" }}>{u.message}</p>}
-                      {u.photoUrl && <img src={u.photoUrl} style={{ width: "100%", maxHeight: "140px", objectFit: "cover", borderRadius: "var(--radius-sm)", marginTop: "0.5rem" }} />}
-                    </div>
-                  </div>
-                ))}
+                <p style={{ margin: 0, fontSize: "1.05rem", fontWeight: 500, color: "var(--color-text-primary)", whiteSpace: "pre-wrap" }}>
+                  {selectedSuspect.description}
+                </p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginTop: "1.25rem", paddingTop: "1rem", borderTop: "1px dashed rgba(168,85,247,0.3)", fontSize: "0.85rem" }}>
+                  <div><strong style={{ color: "#a855f7" }}>Visto em:</strong><br/>{selectedSuspect.initialLocation} {selectedSuspect.lat && selectedSuspect.lng && <a href={`https://maps.google.com/?q=${selectedSuspect.lat},${selectedSuspect.lng}`} target="_blank" rel="noreferrer" style={{ color: "#a855f7", textDecoration: "underline", marginLeft: "4px" }}>(Mapa)</a>}</div>
+                  <div><strong style={{ color: "#a855f7" }}>Direção:</strong><br/>{selectedSuspect.direction || "Desconhecida"}</div>
+                  <div><strong style={{ color: "#a855f7" }}>Reportado por:</strong><br/>{selectedSuspect.vigiaName}</div>
+                  <div><strong style={{ color: "#a855f7" }}>Hora:</strong><br/>{new Date(selectedSuspect.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                </div>
               </div>
-            </div>
 
-            {/* Update form */}
+              {selectedSuspect.updates && selectedSuspect.updates.length > 0 && (
+                <div>
+                  <h4 style={{ margin: "0 0 1rem 0", color: "var(--color-text-secondary)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Histórico de Atualizações</h4>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "1rem", position: "relative" }}>
+                    <div style={{ position: "absolute", top: 0, bottom: 0, left: "15px", width: "2px", background: "rgba(168,85,247,0.2)", zIndex: 0 }}></div>
+                    {selectedSuspect.updates.map((upd: any, idx: number) => (
+                      <div key={idx} style={{ display: "flex", gap: "1rem", position: "relative", zIndex: 1 }}>
+                        <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "var(--color-surface)", border: "2px solid #a855f7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "#a855f7" }}>
+                          {upd.type === 'resolvido' ? <CheckCircle2 size={16} /> : upd.type === 'falso_alarme' ? <X size={16} /> : <AlertTriangle size={16} />}
+                        </div>
+                        <div style={{ background: "var(--color-bg)", padding: "0.85rem", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", flex: 1 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
+                            <div>
+                              <strong style={{ fontSize: "0.85rem", color: "var(--color-text-primary)", display: "block" }}>{upd.vigiaName}</strong>
+                              <span style={{ fontSize: "0.7rem", color: "var(--color-text-tertiary)" }}>{new Date(upd.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                            </div>
+                            <span style={{ background: "rgba(168,85,247,0.1)", color: "#a855f7", padding: "0.2rem 0.5rem", borderRadius: "var(--radius-full)", fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase" }}>
+                              {upd.type.replace('_', ' ')}
+                            </span>
+                          </div>
+                          {upd.photoUrl && (
+                            <img src={upd.photoUrl} alt="Atualização" style={{ width: "100%", maxHeight: "150px", objectFit: "cover", borderRadius: "var(--radius-sm)", marginBottom: "0.5rem" }} />
+                          )}
+                          {upd.message && <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--color-text-secondary)", whiteSpace: "pre-wrap" }}>{upd.message}</p>}
+                          {upd.lat && upd.lng && (
+                            <div style={{ marginTop: "0.5rem" }}>
+                              <a href={`https://maps.google.com/?q=${upd.lat},${upd.lng}`} target="_blank" rel="noreferrer" style={{ fontSize: "0.8rem", color: "#a855f7", textDecoration: "underline" }}>(Ver Local no Mapa)</a>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
             <form onSubmit={handleAddSuspectUpdate} style={{ background: "var(--color-surface)", padding: "1rem", borderRadius: "var(--radius-lg)", border: "1px solid rgba(168,85,247,0.2)", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
               <h4 style={{ margin: 0, fontSize: "0.85rem", fontWeight: 700, color: "#a855f7", textTransform: "uppercase", letterSpacing: "0.04em" }}>Adicionar Atualização</h4>
               <select value={updateType} onChange={(e) => setUpdateType(e.target.value)} className="input">
-                <option value="avistamento">👀 Visto a passar / Novo Local</option>
-                <option value="abordagem">✋ Abordado / Identificado</option>
-                <option value="falso_alarme">❌ Falso Alarme (Fechar ocorrência)</option>
-                <option value="resolvido">✅ A pessoa foi embora (Fechar)</option>
+                <option value="avistamento">Visto a passar / Novo Local</option>
+                <option value="abordagem">Abordado / Identificado</option>
+                <option value="falso_alarme">Falso Alarme (Fechar ocorrência)</option>
+                <option value="resolvido">A pessoa foi embora (Fechar)</option>
               </select>
               <textarea rows={2} value={updateMessage} onChange={(e) => setUpdateMessage(e.target.value)} placeholder={updateType === 'resolvido' || updateType === 'falso_alarme' ? "Descreva o desfecho (Obrigatório)" : "Detalhes adicionais (Opcional)"} className="input" style={{ resize: "none" }}></textarea>
               

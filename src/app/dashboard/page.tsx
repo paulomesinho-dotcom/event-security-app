@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { LogOut, LayoutDashboard, Users, Map, Settings, Clock, MapPin, Building, Plus, Search, HelpCircle, Menu, ChevronDown, AlertTriangle, FileWarning } from "lucide-react";
+import { LogOut, LayoutDashboard, Users, Map, Settings, Clock, MapPin, Building, Plus, Search, HelpCircle, Menu, ChevronDown, AlertTriangle, FileWarning, UserX } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import { updatePassword } from "firebase/auth";
 import { collection, query, where, getDocs, getDoc, doc } from "firebase/firestore";
@@ -22,6 +22,7 @@ import SettingsModal from "@/components/SettingsModal";
 import EmergencyBanner from "@/components/EmergencyBanner";
 import EmergencyDashboard from "@/components/EmergencyDashboard";
 import IncidentManager from "@/components/IncidentManager";
+import SuspectManager from "@/components/SuspectManager";
 import { useWorkplace } from "@/contexts/WorkplaceContext";
 
 function WorkplaceSwitcher() {
@@ -274,6 +275,7 @@ export default function DashboardPage() {
               <NavItem id="locations" icon={MapPin} label="Estrutura de Locais" />
               <NavItem id="plans" icon={Map} label="Plantas & Escalas" />
               <NavItem id="incidents" icon={FileWarning} label="Ocorrências" />
+              <NavItem id="suspects" icon={UserX} label="Suspeitos" />
               <NavItem id="emergency" icon={AlertTriangle} label="Painel de Emergência" />
               <div style={{ height: "1px", background: "rgba(255,255,255,0.1)", margin: "0.5rem 1rem" }} />
               <NavItem id="summary" icon={LayoutDashboard} label="Resumo Global" />
@@ -351,6 +353,7 @@ export default function DashboardPage() {
               {activeTab === 'models' && "Modelos de Turno"}
               {activeTab === 'locations' && "Estrutura de Locais"}
               {activeTab === 'incidents' && "Gestão de Ocorrências"}
+              {activeTab === 'suspects' && "Gestão de Suspeitos"}
               {activeTab === 'summary' && "Resumo Global"}
             </h2>
 
@@ -370,6 +373,7 @@ export default function DashboardPage() {
                 {activeTab === "models" && <ShiftModelManager />}
                 {activeTab === "locations" && <LocationManager />}
                 {activeTab === "incidents" && <IncidentManager />}
+                {activeTab === "suspects" && <SuspectManager />}
                 {activeTab === "emergency" && <EmergencyDashboard />}
                 
                 {activeTab === "plans" && (

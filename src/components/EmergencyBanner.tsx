@@ -6,7 +6,7 @@ import { doc, onSnapshot, setDoc, collection, query, where, addDoc } from "fireb
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useWorkplace } from "@/contexts/WorkplaceContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { AlertTriangle, CheckCircle2, ShieldAlert, X, Camera, Bell, Image as ImageIcon, Eye } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ShieldAlert, X, Camera, Bell, Image as ImageIcon, Eye, UserX } from "lucide-react";
 
 export default function EmergencyBanner() {
   const { user } = useAuth();
@@ -32,6 +32,16 @@ export default function EmergencyBanner() {
   const [activeMissingPersons, setActiveMissingPersons] = useState<any[]>([]);
   const [showMissingDetails, setShowMissingDetails] = useState<any | null>(null);
 
+  // Active Suspects (for Captains/Admins)
+  const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
+  const [showSuspectDetails, setShowSuspectDetails] = useState<any | null>(null);
+  const [dismissedSuspects, setDismissedSuspects] = useState<string[]>([]);
+
+  useEffect(() => {
+    const d = localStorage.getItem("dismissedSuspects");
+    if (d) setDismissedSuspects(JSON.parse(d));
+  }, []);
+
   // Listen to Active Missing Persons
   useEffect(() => {
     const q = query(
@@ -46,6 +56,21 @@ export default function EmergencyBanner() {
     });
     return () => unsub();
   }, []);
+
+  // Listen to Active Suspects
+  useEffect(() => {
+    if (user?.role === "vigia") return; // Vigias already have their own suspect UI in VigiaDashboard
+    const q = query(
+      collection(db, "suspicious_persons"), 
+      where("status", "==", "active")
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const sus: any[] = [];
+      snap.forEach(d => sus.push({ id: d.id, ...d.data() }));
+      setActiveSuspects(sus);
+    });
+    return () => unsub();
+  }, [user]);
 
   // Listen to Global Emergency
   useEffect(() => {
@@ -113,10 +138,11 @@ export default function EmergencyBanner() {
   }
 
   const isBlockingEmergency = hasActiveShift && needsToAcknowledge;
-  const hasActiveBanners = hasActiveShift && !needsToAcknowledge && (isEvacuation || ackedMissing.length > 0);
-  const hasNonBlockingNotifications = !hasActiveShift && (globalEmergency || localEmergencies.length > 0 || activeMissingPersons.length > 0);
+  const visibleSuspects = activeSuspects.filter(s => !dismissedSuspects.includes(s.id));
+  const hasActiveBanners = hasActiveShift && !needsToAcknowledge && (isEvacuation || ackedMissing.length > 0 || visibleSuspects.length > 0);
+  const hasNonBlockingNotifications = !hasActiveShift && (globalEmergency || localEmergencies.length > 0 || activeMissingPersons.length > 0 || visibleSuspects.length > 0);
 
-  if (!isBlockingEmergency && !hasActiveBanners && !hasNonBlockingNotifications && !showMissingDetails && !showIncidentModal) return null;
+  if (!isBlockingEmergency && !hasActiveBanners && !hasNonBlockingNotifications && !showMissingDetails && !showIncidentModal && !showSuspectDetails && visibleSuspects.length === 0) return null;
 
   const handleAcknowledge = async () => {
     try {
@@ -200,6 +226,28 @@ export default function EmergencyBanner() {
             </div>
           </div>
         ))}
+        {user.role !== "vigia" && visibleSuspects.length > 0 && !hasActiveShift && (
+           <div style={{ background: "linear-gradient(135deg, #7c3aed, #a855f7)", color: "white", padding: "1rem", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-lg)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", animation: "slideDown 0.3s ease-out" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+              <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: "50%", padding: "0.5rem" }}>
+                <UserX size={20} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: "0.9rem", textTransform: "uppercase" }}>SUSPEITO ATIVO</div>
+                <div style={{ fontSize: "1rem" }}>{visibleSuspects.length} em acompanhamento</div>
+              </div>
+            </div>
+            <button onClick={(e) => {
+              e.stopPropagation();
+              const idsToDismiss = visibleSuspects.map(s => s.id);
+              const newDismissed = [...new Set([...dismissedSuspects, ...idsToDismiss])];
+              setDismissedSuspects(newDismissed);
+              localStorage.setItem("dismissedSuspects", JSON.stringify(newDismissed));
+            }} style={{ background: "transparent", border: "none", color: "white", cursor: "pointer", padding: "0.5rem" }}>
+              <X size={20} />
+            </button>
+           </div>
+        )}
       </div>
     );
   }
@@ -330,6 +378,34 @@ export default function EmergencyBanner() {
         </div>
       )}
 
+      {/* Suspect Banner for Captains/Admins (non-blocking) */}
+      {visibleSuspects.length > 0 && user?.role !== "vigia" && (
+        <div style={{
+          width: "100%", background: "linear-gradient(135deg, #7c3aed, #a855f7)", color: "white", padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem", zIndex: 9988, position: "relative", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", fontWeight: 800, fontSize: "1rem" }}>
+              <UserX size={20} style={{ animation: "pulse 2s infinite" }} />
+              <span>SUSPEITO ATIVO ({visibleSuspects.length})</span>
+            </div>
+            <button onClick={(e) => {
+              e.stopPropagation();
+              const idsToDismiss = visibleSuspects.map(s => s.id);
+              const newDismissed = [...new Set([...dismissedSuspects, ...idsToDismiss])];
+              setDismissedSuspects(newDismissed);
+              localStorage.setItem("dismissedSuspects", JSON.stringify(newDismissed));
+            }} style={{ background: "transparent", border: "none", color: "white", cursor: "pointer" }}>
+              <X size={24} />
+            </button>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+            <button onClick={() => setShowSuspectDetails(visibleSuspects.length === 1 ? visibleSuspects[0] : "list")} style={{ background: "white", color: "#9333ea", border: "none", padding: "0.6rem 1.25rem", borderRadius: "var(--radius-full)", fontWeight: 800, cursor: "pointer", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <Eye size={16} /> VER DETALHES
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Incident Modal Overlay */}
       {showIncidentModal && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
@@ -415,6 +491,48 @@ export default function EmergencyBanner() {
                   <img src={showMissingDetails.photoUrl} alt="Desaparecido" style={{ width: "100%", maxHeight: "250px", objectFit: "contain", borderRadius: "var(--radius-md)", marginBottom: "1rem", background: "white" }} />
                 )}
                 <p style={{ margin: 0, fontSize: "1rem", whiteSpace: "pre-wrap", color: "var(--color-text-primary)" }}>{showMissingDetails.description}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Suspect Details Modal Overlay */}
+      {showSuspectDetails && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "500px", padding: "2rem", position: "relative", maxHeight: "90vh", overflowY: "auto" }}>
+            <button onClick={() => setShowSuspectDetails(null)} style={{ position: "absolute", top: "1.5rem", right: "1.5rem", background: "transparent", border: "none", color: "var(--color-text-secondary)", cursor: "pointer" }}>
+              <X size={24} />
+            </button>
+            <h2 style={{ margin: "0 0 1.5rem 0", color: "#a855f7", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <UserX size={24} /> Suspeitos Ativos
+            </h2>
+            
+            {showSuspectDetails === "list" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+                {activeSuspects.map(m => (
+                  <div key={m.id} style={{ background: "var(--color-bg)", padding: "1rem", borderRadius: "var(--radius-md)", border: "1px solid rgba(168,85,247,0.3)" }}>
+                    {m.photoUrl && (
+                      <img src={m.photoUrl} alt="Suspeito" style={{ width: "100%", maxHeight: "200px", objectFit: "cover", borderRadius: "var(--radius-md)", marginBottom: "1rem" }} />
+                    )}
+                    <p style={{ margin: 0, fontSize: "0.95rem", whiteSpace: "pre-wrap", color: "var(--color-text-primary)", fontWeight: 500 }}>{m.description}</p>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "1rem", fontSize: "0.85rem" }}>
+                      <div><strong style={{ color: "var(--color-text-secondary)" }}>Visto em:</strong><br/>{m.initialLocation} {m.lat && m.lng && <a href={`https://maps.google.com/?q=${m.lat},${m.lng}`} target="_blank" rel="noreferrer" style={{ color: "#a855f7", textDecoration: "underline", marginLeft: "4px" }}>(Ver no Mapa)</a>}</div>
+                      <div><strong style={{ color: "var(--color-text-secondary)" }}>Direção:</strong><br/>{m.direction || "Desconhecida"}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ background: "var(--color-bg)", padding: "1rem", borderRadius: "var(--radius-md)", border: "1px solid rgba(168,85,247,0.3)" }}>
+                {showSuspectDetails.photoUrl && (
+                  <img src={showSuspectDetails.photoUrl} alt="Suspeito" style={{ width: "100%", maxHeight: "250px", objectFit: "cover", borderRadius: "var(--radius-md)", marginBottom: "1rem" }} />
+                )}
+                <p style={{ margin: 0, fontSize: "1rem", whiteSpace: "pre-wrap", color: "var(--color-text-primary)", fontWeight: 500 }}>{showSuspectDetails.description}</p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "1rem", fontSize: "0.85rem" }}>
+                  <div><strong style={{ color: "var(--color-text-secondary)" }}>Visto em:</strong><br/>{showSuspectDetails.initialLocation} {showSuspectDetails.lat && showSuspectDetails.lng && <a href={`https://maps.google.com/?q=${showSuspectDetails.lat},${showSuspectDetails.lng}`} target="_blank" rel="noreferrer" style={{ color: "#a855f7", textDecoration: "underline", marginLeft: "4px" }}>(Ver no Mapa)</a>}</div>
+                  <div><strong style={{ color: "var(--color-text-secondary)" }}>Direção:</strong><br/>{showSuspectDetails.direction || "Desconhecida"}</div>
+                </div>
               </div>
             )}
           </div>
