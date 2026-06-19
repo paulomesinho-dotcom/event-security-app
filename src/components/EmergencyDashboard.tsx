@@ -1,4 +1,4 @@
-﻿
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -7,7 +7,9 @@ import { doc, setDoc, onSnapshot, collection } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWorkplace } from "@/contexts/WorkplaceContext";
-import { AlertTriangle, Users, CheckCircle2, Circle, Search, MapPin } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, Search, MapPin, Globe, Eye, Lock, ShieldAlert } from "lucide-react";
+
+type TabType = "global_evac" | "local_evac" | "missing";
 
 export default function EmergencyDashboard() {
   const { user } = useAuth();
@@ -28,10 +30,16 @@ export default function EmergencyDashboard() {
   const [missingDesc, setMissingDesc] = useState("");
   const [missingPhoto, setMissingPhoto] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"evacuation" | "missing">("evacuation");
+  
+  const [activeTab, setActiveTab] = useState<TabType>("local_evac");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const canActivate = user?.role === "superadmin" || user?.role === "captain";
+  const isSuperadmin = user?.role === "superadmin";
+  const canActivate = isSuperadmin || user?.role === "captain";
+
+  useEffect(() => {
+    if (isSuperadmin) setActiveTab("global_evac");
+  }, [isSuperadmin]);
 
   useEffect(() => {
     if (!user) return;
@@ -76,7 +84,7 @@ export default function EmergencyDashboard() {
   if (!canActivate) return <div style={{ padding: "2rem" }}>Acesso não autorizado.</div>;
 
   const toggleGlobal = async () => {
-    if (user?.role !== "superadmin") return;
+    if (!isSuperadmin) return;
     if (!confirm(globalEmergency ? "Desativar Alerta Global?" : "Tem a certeza que deseja ATIVAR O ALERTA GLOBAL? Isto afetará TODOS os eventos!")) return;
     try {
       if (globalEmergency) {
@@ -96,7 +104,7 @@ export default function EmergencyDashboard() {
   };
 
   const triggerMissingPerson = async () => {
-    if (user?.role !== "superadmin") return;
+    if (!isSuperadmin) return;
     if (!missingDesc) return alert("Adicione uma descrição.");
     if (!confirm("Ativar alerta de PESSOA DESAPARECIDA em todos os eventos?")) return;
     
@@ -149,54 +157,89 @@ export default function EmergencyDashboard() {
 
   const renderUserTable = (usersToRender: any[], alertAck: string[], evacAck: string[], isEvacuation: boolean) => {
     const filtered = usersToRender.filter(u => u.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    
+    const ackCount = filtered.filter(u => alertAck.includes(u.id)).length;
+    const evacCount = filtered.filter(u => evacAck.includes(u.id)).length;
+
     return (
-      <div style={{ marginTop: "1rem" }}>
-         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-            <h3 style={{ margin: 0, fontSize: "1.1rem" }}>Acompanhamento ({filtered.length})</h3>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", background: "var(--color-bg)", padding: "0.5rem 1rem", borderRadius: "var(--radius-full)" }}>
+      <div style={{ marginTop: "2rem", background: "var(--color-bg)", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)" }}>
+         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1.5rem", borderBottom: "1px solid var(--color-border)" }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600 }}>Acompanhamento em Tempo Real</h3>
+              <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.85rem", color: "var(--color-text-secondary)" }}>
+                {filtered.length} efetivos listados
+                <span style={{ margin: "0 0.5rem", color: "var(--color-border)" }}>|</span>
+                <span style={{ color: "var(--color-success)" }}>{ackCount} Receções</span>
+                {isEvacuation && (
+                  <>
+                    <span style={{ margin: "0 0.5rem", color: "var(--color-border)" }}>|</span>
+                    <span style={{ color: "var(--color-success)" }}>{evacCount} Evacuações</span>
+                  </>
+                )}
+              </p>
+            </div>
+            
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", background: "var(--color-surface)", padding: "0.5rem 1rem", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)" }}>
                <Search size={16} color="var(--color-text-secondary)" />
                <input 
                  type="text" 
-                 placeholder="Pesquisar..." 
+                 placeholder="Pesquisar efetivo..." 
                  value={searchQuery} 
                  onChange={(e) => setSearchQuery(e.target.value)}
-                 style={{ background: "transparent", border: "none", outline: "none", color: "var(--color-text-primary)", fontSize: "0.9rem" }}
+                 style={{ background: "transparent", border: "none", outline: "none", color: "var(--color-text-primary)", fontSize: "0.9rem", width: "200px" }}
                />
             </div>
          </div>
-         <div className="table-container">
-            <table className="data-table">
+
+         <div style={{ overflowX: "auto" }}>
+            <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
                <thead>
-                  <tr>
-                     <th>Nome</th>
-                     <th>Função</th>
-                     <th style={{ textAlign: "center" }}>Receção do Alerta</th>
-                     {isEvacuation && <th style={{ textAlign: "center" }}>Local Evacuado</th>}
+                  <tr style={{ background: "rgba(255,255,255,0.02)" }}>
+                     <th style={{ padding: "1rem 1.5rem", textAlign: "left", fontWeight: 600, color: "var(--color-text-secondary)" }}>Nome & Função</th>
+                     <th style={{ padding: "1rem 1.5rem", textAlign: "center", fontWeight: 600, color: "var(--color-text-secondary)" }}>Receção do Alerta</th>
+                     {isEvacuation && <th style={{ padding: "1rem 1.5rem", textAlign: "center", fontWeight: 600, color: "var(--color-text-secondary)" }}>Local Evacuado</th>}
                   </tr>
                </thead>
                <tbody>
-                  {filtered.map(u => {
-                    const received = alertAck.includes(u.id);
-                    const evacuated = evacAck.includes(u.id);
-                    return (
-                      <tr key={u.id}>
-                         <td><div style={{ fontWeight: 500 }}>{u.name}</div></td>
-                         <td><span style={{ fontSize: "0.8rem", textTransform: "capitalize", background: "rgba(255,255,255,0.1)", padding: "0.2rem 0.5rem", borderRadius: "var(--radius-md)" }}>{u.role}</span></td>
-                         <td style={{ textAlign: "center" }}>
-                            {received 
-                              ? <span style={{ color: "var(--color-success)", display: "inline-flex", alignItems: "center", gap: "0.3rem", fontWeight: 600 }}><CheckCircle2 size={16}/> Confirmado</span> 
-                              : <span style={{ color: "var(--color-text-tertiary)", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}><Circle size={16}/> Pendente</span>}
-                         </td>
-                         {isEvacuation && (
-                           <td style={{ textAlign: "center" }}>
-                             {evacuated 
-                               ? <span style={{ color: "var(--color-success)", display: "inline-flex", alignItems: "center", gap: "0.3rem", fontWeight: 600 }}><CheckCircle2 size={16}/> Evacuado</span> 
-                               : <span style={{ color: "var(--color-warning)", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}><Circle size={16}/> Em curso</span>}
+                  {filtered.length === 0 ? (
+                    <tr>
+                      <td colSpan={isEvacuation ? 3 : 2} style={{ padding: "3rem", textAlign: "center", color: "var(--color-text-secondary)" }}>
+                        Nenhum resultado encontrado.
+                      </td>
+                    </tr>
+                  ) : (
+                    filtered.map(u => {
+                      const received = alertAck.includes(u.id);
+                      const evacuated = evacAck.includes(u.id);
+                      return (
+                        <tr key={u.id} style={{ borderTop: "1px solid var(--color-border)" }}>
+                           <td style={{ padding: "1rem 1.5rem" }}>
+                             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                               <div style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--color-surface)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 600, fontSize: "0.8rem", color: "var(--color-text-secondary)", border: "1px solid var(--color-border)" }}>
+                                 {u.name.substring(0,2).toUpperCase()}
+                               </div>
+                               <div>
+                                 <div style={{ fontWeight: 500, color: "var(--color-text-primary)" }}>{u.name}</div>
+                                 <div style={{ fontSize: "0.75rem", textTransform: "capitalize", color: "var(--color-text-secondary)", marginTop: "0.15rem" }}>{u.role}</div>
+                               </div>
+                             </div>
                            </td>
-                         )}
-                      </tr>
-                    );
-                  })}
+                           <td style={{ padding: "1rem 1.5rem", textAlign: "center" }}>
+                              {received 
+                                ? <span style={{ color: "var(--color-success)", display: "inline-flex", alignItems: "center", gap: "0.3rem", fontWeight: 500, background: "rgba(34, 197, 94, 0.1)", padding: "0.25rem 0.75rem", borderRadius: "var(--radius-full)" }}><CheckCircle2 size={16}/> Recebido</span> 
+                                : <span style={{ color: "var(--color-text-tertiary)", display: "inline-flex", alignItems: "center", gap: "0.3rem", background: "rgba(255, 255, 255, 0.05)", padding: "0.25rem 0.75rem", borderRadius: "var(--radius-full)" }}><Circle size={16}/> Aguarda</span>}
+                           </td>
+                           {isEvacuation && (
+                             <td style={{ padding: "1rem 1.5rem", textAlign: "center" }}>
+                               {evacuated 
+                                 ? <span style={{ color: "var(--color-success)", display: "inline-flex", alignItems: "center", gap: "0.3rem", fontWeight: 500, background: "rgba(34, 197, 94, 0.1)", padding: "0.25rem 0.75rem", borderRadius: "var(--radius-full)" }}><CheckCircle2 size={16}/> Evacuado</span> 
+                                 : <span style={{ color: "var(--color-warning)", display: "inline-flex", alignItems: "center", gap: "0.3rem", background: "rgba(234, 179, 8, 0.1)", padding: "0.25rem 0.75rem", borderRadius: "var(--radius-full)" }}><Circle size={16}/> Em curso</span>}
+                             </td>
+                           )}
+                        </tr>
+                      );
+                    })
+                  )}
                </tbody>
             </table>
          </div>
@@ -204,100 +247,200 @@ export default function EmergencyDashboard() {
     );
   };
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
-      {user.role === "superadmin" && (
-        <div style={{ background: "var(--color-surface)", padding: "2rem", borderRadius: "var(--radius-lg)", border: globalEmergency ? "2px solid var(--color-danger)" : "1px solid var(--color-border)" }}>
-           <h2 style={{ margin: "0 0 1.5rem 0", display: "flex", alignItems: "center", gap: "0.5rem", color: globalEmergency ? "var(--color-danger)" : "var(--color-text-primary)" }}>
-              <AlertTriangle size={24} />
-              Gestão de Emergência Global
-           </h2>
+  const TabButton = ({ id, icon: Icon, label, color, activeColor }: { id: TabType, icon: any, label: string, color: string, activeColor: string }) => {
+    const isActive = activeTab === id;
+    return (
+      <button 
+        onClick={() => setActiveTab(id)}
+        style={{
+          display: "flex", alignItems: "center", gap: "0.75rem",
+          padding: "1rem 1.5rem",
+          background: isActive ? `${activeColor}15` : "transparent",
+          color: isActive ? activeColor : "var(--color-text-secondary)",
+          border: "none",
+          borderBottom: isActive ? `3px solid ${activeColor}` : "3px solid transparent",
+          cursor: "pointer",
+          fontWeight: isActive ? 600 : 500,
+          fontSize: "1rem",
+          transition: "all 0.2s ease"
+        }}
+      >
+        <Icon size={18} />
+        {label}
+      </button>
+    );
+  };
 
-           {globalEmergency ? (
-             <div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(239, 68, 68, 0.1)", padding: "1.5rem", borderRadius: "var(--radius-md)", marginBottom: "2rem" }}>
-                   <div>
-                     <h3 style={{ margin: 0, color: "var(--color-danger)", fontSize: "1.25rem" }}>ALERTA GLOBAL ATIVO</h3>
-                     <p style={{ margin: "0.5rem 0 0 0", color: "var(--color-text-secondary)" }}>Tipo: <strong>{globalAlertType === "missing_person" ? "Pessoa Desaparecida" : "Evacuação"}</strong></p>
-                   </div>
-                   <button onClick={toggleGlobal} className="btn btn-danger" style={{ padding: "1rem 2rem", fontSize: "1rem" }}>
-                     DESATIVAR ALERTA GLOBAL
-                   </button>
-                </div>
-                {renderUserTable(allUsers, globalAlertAck, globalEvacAck, globalAlertType === "evacuation")}
-             </div>
-           ) : (
-             <div>
-               <div style={{ display: "flex", borderBottom: "1px solid var(--color-border)", marginBottom: "1.5rem" }}>
-                  <button onClick={() => setActiveTab("evacuation")} style={{ padding: "1rem 2rem", background: activeTab === "evacuation" ? "rgba(255,255,255,0.05)" : "transparent", border: "none", borderBottom: activeTab === "evacuation" ? "2px solid var(--color-danger)" : "2px solid transparent", color: "var(--color-text-primary)", fontWeight: 600, cursor: "pointer", fontSize: "1rem" }}>Evacuação Total</button>
-                  <button onClick={() => setActiveTab("missing")} style={{ padding: "1rem 2rem", background: activeTab === "missing" ? "rgba(255,255,255,0.05)" : "transparent", border: "none", borderBottom: activeTab === "missing" ? "2px solid #eab308" : "2px solid transparent", color: "var(--color-text-primary)", fontWeight: 600, cursor: "pointer", fontSize: "1rem" }}>Pessoa Desaparecida</button>
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--color-surface)", borderRadius: "var(--radius-lg)" }}>
+      
+      <div style={{ borderBottom: "1px solid var(--color-border)", padding: "0 1rem" }}>
+        <div style={{ display: "flex", gap: "1rem", overflowX: "auto" }}>
+          {isSuperadmin && (
+            <TabButton id="global_evac" icon={Globe} label="Evacuação Total" color="var(--color-text-secondary)" activeColor="var(--color-danger)" />
+          )}
+          <TabButton id="local_evac" icon={MapPin} label="Alerta de Zona" color="var(--color-text-secondary)" activeColor="#f97316" />
+          {isSuperadmin && (
+            <TabButton id="missing" icon={Eye} label="Pessoa Desaparecida" color="var(--color-text-secondary)" activeColor="#eab308" />
+          )}
+        </div>
+      </div>
+
+      <div style={{ padding: "2rem", flex: 1, overflowY: "auto" }}>
+        
+        {activeTab === "global_evac" && isSuperadmin && (
+          <div className="animate-fade-in">
+             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "2rem" }}>
+               <div style={{ maxWidth: "600px" }}>
+                 <h2 style={{ fontSize: "1.5rem", fontWeight: 700, margin: "0 0 0.5rem 0", color: "var(--color-text-primary)" }}>Protocolo de Evacuação Total</h2>
+                 <p style={{ color: "var(--color-text-secondary)", lineHeight: 1.6, margin: 0 }}>
+                   A ativação deste protocolo irá bloquear todos os terminais do sistema com um ecrã vermelho intransponível. Exigirá confirmação de receção e posterior confirmação de evacuação de todas as equipas no terreno.
+                 </p>
                </div>
 
-               {activeTab === "evacuation" && (
-                 <div style={{ maxWidth: "600px" }}>
-                   <p style={{ color: "var(--color-text-secondary)", marginBottom: "1.5rem", lineHeight: 1.6 }}>Ao ativar a evacuação total, todos os vigias e capitães receberão um ecrã de aviso intransponível até confirmarem a receção. Terão também de confirmar a evacuação dos seus respetivos locais.</p>
-                   <button onClick={toggleGlobal} className="btn btn-danger" style={{ padding: "1rem 2rem", fontSize: "1rem" }}>
-                     🚨 ATIVAR EMERGÊNCIA GLOBAL DE EVACUAÇÃO
-                   </button>
-                 </div>
-               )}
-
-               {activeTab === "missing" && (
-                 <div style={{ maxWidth: "600px" }}>
-                   <p style={{ color: "var(--color-text-secondary)", marginBottom: "1.5rem", lineHeight: 1.6 }}>Este alerta notifica todos os terminais com fotografia e descrição para procurarem por uma pessoa (ex: criança perdida).</p>
-                   <div style={{ marginBottom: "1.5rem" }}>
-                      <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600 }}>Descrição Completa (Obrigatório)</label>
-                      <textarea className="input" rows={4} value={missingDesc} onChange={e => setMissingDesc(e.target.value)} placeholder="Ex: Criança, 5 anos, t-shirt azul, chora e procura pelos pais..."></textarea>
-                   </div>
-                   <div style={{ marginBottom: "2rem" }}>
-                      <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600 }}>Fotografia Recente (Opcional)</label>
-                      <input type="file" accept="image/*" onChange={e => setMissingPhoto(e.target.files?.[0] || null)} className="input" style={{ padding: "0.75rem" }} />
-                   </div>
-                   <button onClick={triggerMissingPerson} disabled={uploading || !missingDesc} className="btn" style={{ padding: "1rem 2rem", fontSize: "1rem", background: uploading || !missingDesc ? "var(--color-border)" : "#eab308", color: uploading || !missingDesc ? "var(--color-text-tertiary)" : "white" }}>
-                     {uploading ? "A DISPARAR..." : "👀 DISPARAR ALERTA DE PESSOA DESAPARECIDA"}
-                   </button>
-                 </div>
+               {globalEmergency && globalAlertType === "evacuation" ? (
+                 <button onClick={toggleGlobal} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.75rem 1.5rem", background: "transparent", border: "2px solid var(--color-danger)", color: "var(--color-danger)", borderRadius: "var(--radius-md)", fontWeight: 600, cursor: "pointer", fontSize: "0.95rem" }}>
+                   DESATIVAR ALERTA GLOBAL
+                 </button>
+               ) : (
+                 <button onClick={toggleGlobal} disabled={globalEmergency && globalAlertType !== "evacuation"} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.75rem 1.5rem", background: "var(--color-danger)", color: "white", border: "none", borderRadius: "var(--radius-md)", fontWeight: 600, cursor: (globalEmergency && globalAlertType !== "evacuation") ? "not-allowed" : "pointer", fontSize: "0.95rem", opacity: (globalEmergency && globalAlertType !== "evacuation") ? 0.5 : 1 }}>
+                   <ShieldAlert size={18} />
+                   INICIAR EVACUAÇÃO TOTAL
+                 </button>
                )}
              </div>
-           )}
-        </div>
-      )}
 
-      {activeWorkplaceId && !globalEmergency && (
-        <div style={{ background: "var(--color-surface)", padding: "2rem", borderRadius: "var(--radius-lg)", border: workplaceEmergency ? "2px solid #f97316" : "1px solid var(--color-border)" }}>
-           <h2 style={{ margin: "0 0 1.5rem 0", display: "flex", alignItems: "center", gap: "0.5rem", color: workplaceEmergency ? "#f97316" : "var(--color-text-primary)" }}>
-              <MapPin size={24} />
-              Emergência Local: {activeWorkplace?.name}
-           </h2>
+             {globalEmergency && globalAlertType === "evacuation" && (
+               <div style={{ background: "rgba(239, 68, 68, 0.05)", borderLeft: "4px solid var(--color-danger)", padding: "1rem 1.5rem", borderRadius: "0 var(--radius-md) var(--radius-md) 0", marginBottom: "2rem", display: "flex", alignItems: "center", gap: "1rem" }}>
+                 <div style={{ background: "var(--color-danger)", width: 12, height: 12, borderRadius: "50%", animation: "pulse 2s infinite" }} />
+                 <span style={{ color: "var(--color-danger)", fontWeight: 600, letterSpacing: "0.05em" }}>EMERGÊNCIA GLOBAL EM CURSO</span>
+               </div>
+             )}
 
-           {workplaceEmergency ? (
-             <div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(249, 115, 22, 0.1)", padding: "1.5rem", borderRadius: "var(--radius-md)", marginBottom: "2rem" }}>
-                   <div>
-                     <h3 style={{ margin: 0, color: "#f97316", fontSize: "1.25rem" }}>ALERTA LOCAL DE EVACUAÇÃO ATIVO</h3>
-                     <p style={{ margin: "0.5rem 0 0 0", color: "var(--color-text-secondary)" }}>Todos os elementos deste local estão notificados.</p>
-                   </div>
-                   <button onClick={toggleWorkplace} style={{ padding: "1rem 2rem", fontSize: "1rem", background: "transparent", border: "2px solid #f97316", color: "#f97316", borderRadius: "var(--radius-md)", fontWeight: 700, cursor: "pointer" }}>
-                     DESATIVAR ALERTA LOCAL
-                   </button>
+             {renderUserTable(allUsers, globalAlertAck, globalEvacAck, true)}
+          </div>
+        )}
+
+        {activeTab === "local_evac" && (
+          <div className="animate-fade-in">
+             {!activeWorkplaceId ? (
+                <div style={{ textAlign: "center", padding: "4rem 2rem", background: "var(--color-bg)", borderRadius: "var(--radius-lg)", border: "1px dashed var(--color-border)" }}>
+                   <MapPin size={48} color="var(--color-text-tertiary)" style={{ margin: "0 auto 1rem auto" }} />
+                   <h3 style={{ margin: "0 0 0.5rem 0", color: "var(--color-text-secondary)" }}>Nenhum Local Selecionado</h3>
+                   <p style={{ margin: 0, color: "var(--color-text-tertiary)", fontSize: "0.9rem" }}>Selecione um Workplace no topo para aceder ao respetivo painel de emergência.</p>
                 </div>
-                {renderUserTable(workplaceUsers, workplaceAlertAck, workplaceEvacAck, true)}
-             </div>
-           ) : (
-             <div style={{ maxWidth: "600px" }}>
-               <p style={{ color: "var(--color-text-secondary)", marginBottom: "1.5rem", lineHeight: 1.6 }}>Este alerta fará soar os avisos apenas nos terminais associados ao Workplace <strong>{activeWorkplace?.name}</strong>.</p>
-               <button onClick={toggleWorkplace} style={{ padding: "1rem 2rem", fontSize: "1rem", background: "#f97316", color: "white", border: "none", borderRadius: "var(--radius-md)", fontWeight: 700, cursor: "pointer" }}>
-                 📍 ATIVAR EMERGÊNCIA NESTE LOCAL
-               </button>
-             </div>
-           )}
-        </div>
-      )}
+             ) : (
+                <>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "2rem" }}>
+                    <div style={{ maxWidth: "600px" }}>
+                      <h2 style={{ fontSize: "1.5rem", fontWeight: 700, margin: "0 0 0.5rem 0", color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                         Evacuação: {activeWorkplace?.name}
+                      </h2>
+                      <p style={{ color: "var(--color-text-secondary)", lineHeight: 1.6, margin: 0 }}>
+                        Este protocolo emite um alerta sonoro e visual apenas para os dispositivos dos seguranças alocados a este local.
+                      </p>
+                    </div>
 
-      {!activeWorkplaceId && user.role !== "superadmin" && (
-         <div style={{ padding: "2rem", textAlign: "center", color: "var(--color-text-secondary)" }}>Selecione um Workplace para aceder aos controlos de emergência locais.</div>
-      )}
+                    {workplaceEmergency ? (
+                      <button onClick={toggleWorkplace} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.75rem 1.5rem", background: "transparent", border: "2px solid #f97316", color: "#f97316", borderRadius: "var(--radius-md)", fontWeight: 600, cursor: "pointer", fontSize: "0.95rem" }}>
+                        DESATIVAR ALERTA LOCAL
+                      </button>
+                    ) : (
+                      <button onClick={toggleWorkplace} disabled={globalEmergency} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.75rem 1.5rem", background: "#f97316", color: "white", border: "none", borderRadius: "var(--radius-md)", fontWeight: 600, cursor: globalEmergency ? "not-allowed" : "pointer", fontSize: "0.95rem", opacity: globalEmergency ? 0.5 : 1 }}>
+                        <MapPin size={18} />
+                        INICIAR ALERTA DE ZONA
+                      </button>
+                    )}
+                  </div>
+
+                  {globalEmergency && (
+                     <div style={{ background: "rgba(255,255,255,0.05)", padding: "1rem", borderRadius: "var(--radius-md)", marginBottom: "2rem", display: "flex", alignItems: "center", gap: "1rem", color: "var(--color-text-secondary)", fontSize: "0.9rem" }}>
+                        <Lock size={16} /> Ações locais desativadas enquanto houver uma Emergência Global em curso.
+                     </div>
+                  )}
+
+                  {workplaceEmergency && (
+                    <div style={{ background: "rgba(249, 115, 22, 0.05)", borderLeft: "4px solid #f97316", padding: "1rem 1.5rem", borderRadius: "0 var(--radius-md) var(--radius-md) 0", marginBottom: "2rem", display: "flex", alignItems: "center", gap: "1rem" }}>
+                      <div style={{ background: "#f97316", width: 12, height: 12, borderRadius: "50%", animation: "pulse 2s infinite" }} />
+                      <span style={{ color: "#f97316", fontWeight: 600, letterSpacing: "0.05em" }}>ALERTA DE ZONA ATIVO</span>
+                    </div>
+                  )}
+
+                  {renderUserTable(workplaceUsers, workplaceAlertAck, workplaceEvacAck, true)}
+                </>
+             )}
+          </div>
+        )}
+
+        {activeTab === "missing" && isSuperadmin && (
+          <div className="animate-fade-in">
+             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "2rem" }}>
+               <div style={{ maxWidth: "600px" }}>
+                 <h2 style={{ fontSize: "1.5rem", fontWeight: 700, margin: "0 0 0.5rem 0", color: "var(--color-text-primary)" }}>Alerta de Pessoa Desaparecida</h2>
+                 <p style={{ color: "var(--color-text-secondary)", lineHeight: 1.6, margin: 0 }}>
+                   Dispara um alerta global para todas as equipas focarem a sua atenção na procura. Adicione o máximo de detalhes possível.
+                 </p>
+               </div>
+
+               {globalEmergency && globalAlertType === "missing_person" && (
+                 <button onClick={toggleGlobal} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.75rem 1.5rem", background: "transparent", border: "2px solid #eab308", color: "#eab308", borderRadius: "var(--radius-md)", fontWeight: 600, cursor: "pointer", fontSize: "0.95rem" }}>
+                   DESATIVAR ALERTA DE BUSCA
+                 </button>
+               )}
+             </div>
+
+             {globalEmergency && globalAlertType === "missing_person" ? (
+                <>
+                  <div style={{ background: "rgba(234, 179, 8, 0.05)", borderLeft: "4px solid #eab308", padding: "1rem 1.5rem", borderRadius: "0 var(--radius-md) var(--radius-md) 0", marginBottom: "2rem", display: "flex", alignItems: "center", gap: "1rem" }}>
+                    <div style={{ background: "#eab308", width: 12, height: 12, borderRadius: "50%", animation: "pulse 2s infinite" }} />
+                    <span style={{ color: "#eab308", fontWeight: 600, letterSpacing: "0.05em" }}>BUSCA ATIVA EM CURSO</span>
+                  </div>
+                  {renderUserTable(allUsers, globalAlertAck, globalEvacAck, false)}
+                </>
+             ) : (
+                <div style={{ background: "var(--color-bg)", padding: "2rem", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)", maxWidth: "800px" }}>
+                   <div style={{ marginBottom: "1.5rem" }}>
+                      <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600, color: "var(--color-text-primary)" }}>Descrição Completa (Obrigatório)</label>
+                      <textarea 
+                        className="input" 
+                        rows={4} 
+                        value={missingDesc} 
+                        onChange={e => setMissingDesc(e.target.value)} 
+                        placeholder="Ex: Criança, aprox. 5 anos, t-shirt azul do porto, chora e procura pela mãe, visto pela última vez perto da Porta 3..."
+                        style={{ width: "100%", padding: "1rem", background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", color: "var(--color-text-primary)", resize: "vertical" }}
+                      />
+                   </div>
+
+                   <div style={{ marginBottom: "2.5rem" }}>
+                      <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600, color: "var(--color-text-primary)" }}>Fotografia de Referência (Opcional mas recomendado)</label>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={e => setMissingPhoto(e.target.files?.[0] || null)} 
+                        style={{ width: "100%", padding: "0.75rem", background: "var(--color-surface)", border: "1px dashed var(--color-border)", borderRadius: "var(--radius-md)", color: "var(--color-text-secondary)" }} 
+                      />
+                   </div>
+
+                   <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                     <button 
+                        onClick={triggerMissingPerson} 
+                        disabled={uploading || !missingDesc || (globalEmergency && globalAlertType !== "missing_person")} 
+                        style={{ 
+                          display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.85rem 2rem", 
+                          background: (uploading || !missingDesc) ? "var(--color-bg)" : "#eab308", 
+                          color: (uploading || !missingDesc) ? "var(--color-text-tertiary)" : "#000", 
+                          border: "none", borderRadius: "var(--radius-md)", fontWeight: 700, cursor: (uploading || !missingDesc) ? "not-allowed" : "pointer", fontSize: "1rem", transition: "all 0.2s" 
+                        }}
+                      >
+                       <Eye size={20} />
+                       {uploading ? "A DISPARAR..." : "DISPARAR ALERTA DE BUSCA"}
+                     </button>
+                   </div>
+                </div>
+             )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
-
