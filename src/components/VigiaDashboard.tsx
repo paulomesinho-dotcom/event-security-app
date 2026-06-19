@@ -351,6 +351,7 @@ export default function VigiaDashboard() {
             className="btn btn-primary" 
             style={{ width: "100%", padding: "0.5rem" }}
             onClick={() => {
+              if (!user) return;
               requestNotificationPermission(user.uid).then(token => {
                 if (token) setShowNotifPrompt(false);
                 else alert("Para ativar, poderá ter de adicionar a App ao ecrã inicial primeiro (no iPhone: Partilhar -> Adicionar ao Ecrã Principal).");
