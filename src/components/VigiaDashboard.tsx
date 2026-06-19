@@ -374,7 +374,7 @@ export default function VigiaDashboard() {
       await addDoc(collection(db, "suspicious_persons"), {
         vigiaId: user?.uid,
         vigiaName: user?.name || user?.email || "Vigia",
-        initialLocation: suspectLocation || activeShift?.locatorName || "Desconhecido",
+        initialLocation: suspectLocation || activeWorkplace?.name || activeShift?.locatorName || "Desconhecido",
         direction: suspectDirection,
         description: suspectDesc,
         photoUrl,
@@ -879,14 +879,14 @@ export default function VigiaDashboard() {
                 <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem", fontWeight: 700, color: "#a855f7", marginBottom: "0.4rem", letterSpacing: "0.04em", textTransform: "uppercase" }}>👤 Descrição Física / Roupa <span style={{ color: "#ef4444" }}>*</span></label>
                 <textarea required rows={3} value={suspectDesc} onChange={(e) => setSuspectDesc(e.target.value)} placeholder="Ex: Homem, t-shirt azul, chapéu preto, altura média..." className="input-field" style={{ resize: "none", borderColor: suspectDesc ? "rgba(168,85,247,0.5)" : undefined }}></textarea>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
                 <div>
                   <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem", fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>📍 Local Visto</label>
-                  <input type="text" value={suspectLocation} onChange={(e) => setSuspectLocation(e.target.value)} placeholder={activeShift?.locatorName || "Desconhecido"} className="input-field" />
+                  <input type="text" value={suspectLocation} onChange={(e) => setSuspectLocation(e.target.value)} placeholder={activeWorkplace?.name || activeShift?.locatorName || "Desconhecido"} className="input-field" />
                 </div>
                 <div>
-                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem", fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>🧭 Direção</label>
-                  <input type="text" value={suspectDirection} onChange={(e) => setSuspectDirection(e.target.value)} placeholder="Ex: Palco principal" className="input-field" />
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem", fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>🧭 Direção (Opcional)</label>
+                  <input type="text" value={suspectDirection} onChange={(e) => setSuspectDirection(e.target.value)} placeholder="Ex: Palco principal, saída norte..." className="input-field" />
                 </div>
               </div>
               <div>
