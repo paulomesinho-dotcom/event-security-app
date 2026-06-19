@@ -573,14 +573,21 @@ export default function EmergencyDashboard() {
                )}
              </div>
 
-             {globalEmergency && globalAlertType === "evacuation" && (
-               <div style={{ background: "rgba(239, 68, 68, 0.05)", borderLeft: "4px solid var(--color-danger)", padding: "0.75rem 1rem", borderRadius: "0 var(--radius-md) var(--radius-md) 0", marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                 <div style={{ background: "var(--color-danger)", width: 10, height: 10, borderRadius: "50%", animation: "pulse 2s infinite" }} />
-                 <span style={{ color: "var(--color-danger)", fontWeight: 600, letterSpacing: "0.05em", fontSize: "0.85rem" }}>EMERGÊNCIA GLOBAL EM CURSO</span>
-               </div>
+             {globalEmergency && globalAlertType === "evacuation" ? (
+               <>
+                 <div style={{ background: "rgba(239, 68, 68, 0.05)", borderLeft: "4px solid var(--color-danger)", padding: "0.75rem 1rem", borderRadius: "0 var(--radius-md) var(--radius-md) 0", marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                   <div style={{ background: "var(--color-danger)", width: 10, height: 10, borderRadius: "50%", animation: "pulse 2s infinite" }} />
+                   <span style={{ color: "var(--color-danger)", fontWeight: 600, letterSpacing: "0.05em", fontSize: "0.85rem" }}>EMERGÊNCIA GLOBAL EM CURSO</span>
+                 </div>
+                 {renderUserTable(allUsers, globalAlertAck, globalEvacAck, true, null)}
+               </>
+             ) : (
+                <div style={{ textAlign: "center", padding: "4rem", background: "var(--color-surface)", borderRadius: "var(--radius-lg)", border: "1px dashed var(--color-border)", marginBottom: "2rem" }}>
+                   <ShieldAlert size={48} color="var(--color-text-tertiary)" style={{ margin: "0 auto 1rem auto" }} />
+                   <h3 style={{ margin: "0 0 0.5rem 0", color: "var(--color-text-secondary)" }}>Nenhuma emergência em curso</h3>
+                   <p style={{ margin: 0, color: "var(--color-text-tertiary)", fontSize: "0.85rem" }}>Apenas ative este protocolo em caso de evacuação total do recinto.</p>
+                </div>
              )}
-
-             {renderUserTable(allUsers, globalAlertAck, globalEvacAck, true, null)}
           </div>
         )}
 
@@ -622,14 +629,21 @@ export default function EmergencyDashboard() {
                      </div>
                   )}
 
-                  {workplaceEmergency && (
-                    <div style={{ background: "rgba(249, 115, 22, 0.05)", borderLeft: "4px solid #f97316", padding: "0.75rem 1rem", borderRadius: "0 var(--radius-md) var(--radius-md) 0", marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                      <div style={{ background: "#f97316", width: 10, height: 10, borderRadius: "50%", animation: "pulse 2s infinite" }} />
-                      <span style={{ color: "#f97316", fontWeight: 600, letterSpacing: "0.05em", fontSize: "0.85rem" }}>ALERTA DE ZONA ATIVO</span>
+                  {workplaceEmergency ? (
+                    <>
+                      <div style={{ background: "rgba(249, 115, 22, 0.05)", borderLeft: "4px solid #f97316", padding: "0.75rem 1rem", borderRadius: "0 var(--radius-md) var(--radius-md) 0", marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                        <div style={{ background: "#f97316", width: 10, height: 10, borderRadius: "50%", animation: "pulse 2s infinite" }} />
+                        <span style={{ color: "#f97316", fontWeight: 600, letterSpacing: "0.05em", fontSize: "0.85rem" }}>ALERTA DE ZONA ATIVO</span>
+                      </div>
+                      {renderUserTable(allUsers, workplaceAlertAck, workplaceEvacAck, true, activeWorkplaceId)}
+                    </>
+                  ) : !globalEmergency && (
+                    <div style={{ textAlign: "center", padding: "4rem", background: "var(--color-surface)", borderRadius: "var(--radius-lg)", border: "1px dashed var(--color-border)", marginBottom: "2rem" }}>
+                       <MapPin size={48} color="var(--color-text-tertiary)" style={{ margin: "0 auto 1rem auto" }} />
+                       <h3 style={{ margin: "0 0 0.5rem 0", color: "var(--color-text-secondary)" }}>Nenhuma emergência em curso</h3>
+                       <p style={{ margin: 0, color: "var(--color-text-tertiary)", fontSize: "0.85rem" }}>Pode iniciar um alerta de zona se necessário.</p>
                     </div>
                   )}
-
-                  {renderUserTable(allUsers, workplaceAlertAck, workplaceEvacAck, true, activeWorkplaceId)}
                 </>
              )}
           </div>
