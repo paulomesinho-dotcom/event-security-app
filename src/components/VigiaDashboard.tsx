@@ -315,7 +315,8 @@ export default function VigiaDashboard() {
 
   return (
     <>
-    <div className="animate-fade-in" style={{ maxWidth: "860px", margin: "0 auto", padding: "0 0.25rem 1rem 0.25rem" }}>
+    {/* SCROLLABLE CONTENT — flex: 1 so it fills remaining height */}
+    <div className="animate-fade-in vigia-app-main" style={{ padding: "1rem 0.5rem" }}>
       {fcmBanner && (
         <div style={{ marginBottom: "1rem", display: "flex", gap: "0.75rem", alignItems: "flex-start", padding: "0.9rem 1rem", background: "linear-gradient(135deg, #1e1b4b, #312e81)", borderRadius: "var(--radius-lg)", color: "white", boxShadow: "0 4px 20px rgba(99,102,241,0.4)", animation: "slideDown 0.3s ease" }}>
           <Bell size={18} style={{ flexShrink: 0, marginTop: "0.1rem", color: "#a5b4fc" }} />

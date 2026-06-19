@@ -135,7 +135,10 @@ export default function DashboardPage() {
     return <div style={{ padding: "2rem", textAlign: "center" }}>A carregar o painel...</div>;
   }
 
-  // Vigia Dashboard — Mobile-first, dvh-based layout
+  // Vigia Dashboard — Mobile-first, 100dvh flex layout
+  // VigiaDashboard renders a Fragment with 2 flex children:
+  //   1. scrollable content (flex: 1, overflow-y: auto)
+  //   2. bottom navigation bar (flex-shrink: 0)
   if (user.role === "vigia") {
     return (
       <div className="vigia-app-root">
@@ -153,9 +156,7 @@ export default function DashboardPage() {
             <button onClick={handleLogout} className="btn btn-secondary" style={{ padding: "0.35rem 0.6rem", fontSize: "0.8rem" }}><LogOut size={14} /></button>
           </div>
         </nav>
-        <main className="vigia-app-main" style={{ padding: "1rem 0.5rem" }}>
-          <VigiaDashboard />
-        </main>
+        <VigiaDashboard />
       </div>
     );
   }
