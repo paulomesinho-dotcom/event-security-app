@@ -553,14 +553,17 @@ export default function VigiaDashboard() {
 
             <div style={{ marginBottom: "2rem" }}>
               <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600 }}>Fotografia (Opcional)</label>
-              <input 
-                type="file" 
-                accept="image/*" 
-                onChange={e => setIncidentPhoto(e.target.files?.[0] || null)}
-                className="input"
-                style={{ padding: "0.75rem", width: "100%" }}
-              />
-              {incidentPhoto && <p style={{ margin: "0.35rem 0 0", fontSize: "0.75rem", color: "var(--color-success)" }}>✓ {incidentPhoto.name}</p>}
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <label style={{ flex: 1, padding: "0.75rem", background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", textAlign: "center", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}>
+                  📸 Câmara
+                  <input type="file" accept="image/*" capture="environment" onChange={e => setIncidentPhoto(e.target.files?.[0] || null)} style={{ display: "none" }} />
+                </label>
+                <label style={{ flex: 1, padding: "0.75rem", background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", textAlign: "center", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}>
+                  🖼️ Galeria
+                  <input type="file" accept="image/*" onChange={e => setIncidentPhoto(e.target.files?.[0] || null)} style={{ display: "none" }} />
+                </label>
+              </div>
+              {incidentPhoto && <p style={{ margin: "0.5rem 0 0", fontSize: "0.8rem", color: "var(--color-success)", fontWeight: 600 }}>✓ Anexo: {incidentPhoto.name}</p>}
             </div>
 
             <button 
