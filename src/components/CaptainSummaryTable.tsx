@@ -276,7 +276,7 @@ export default function CaptainSummaryTable() {
       {/* Modal de Notificação */}
       {showNotifModal && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem", backdropFilter: "blur(4px)" }}>
-          <div className="glass animate-fade-in" style={{ background: "var(--color-surface)", padding: "2rem", borderRadius: "var(--radius-lg)", width: "100%", maxWidth: "400px", position: "relative" }}>
+          <div className="glass animate-fade-in" style={{ background: "var(--color-surface)", padding: "2rem", borderRadius: "var(--radius-lg)", width: "100%", maxWidth: "400px", position: "relative", maxHeight: "90vh", overflowY: "auto" }}>
             
             <button 
                onClick={() => setShowNotifModal(false)}
@@ -295,7 +295,7 @@ export default function CaptainSummaryTable() {
             </p>
 
             {vigiaNotifications.length > 0 && (
-              <div style={{ marginBottom: "1rem", maxHeight: "180px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.5rem", padding: "0.5rem", background: "var(--color-bg)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)" }}>
+              <div style={{ marginBottom: "1rem", maxHeight: "140px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.5rem", padding: "0.5rem", background: "var(--color-bg)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)" }}>
                 {vigiaNotifications.map(n => {
                   const timeStr = n.createdAt ? new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
                   return (
