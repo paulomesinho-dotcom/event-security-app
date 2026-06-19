@@ -351,8 +351,8 @@ export default function EmergencyDashboard() {
 
                       const shiftForUser = activeShifts.find((s: any) => s.personId === u.id);
                       const wpForShift = shiftForUser ? workplaces.find(w => w.planIds?.includes(shiftForUser.planId)) : null;
-                      const workplaceName = wpForShift ? wpForShift.name : (shiftForUser ? "Desconhecido" : "N/A");
-                      const locatorName = shiftForUser ? shiftForUser.locatorName : "N/A";
+                      const workplaceName = wpForShift ? wpForShift.name : (shiftForUser ? "Desconhecido" : "Sem Turno Ativo");
+                      const locatorName = shiftForUser ? shiftForUser.locatorName : "Sem Posição";
                       const activeIncident = userIncidents.length > 0 ? userIncidents[userIncidents.length - 1] : null;
                       const isExpanded = selectedIncident && activeIncident && selectedIncident.id === activeIncident.id;
 
