@@ -8,11 +8,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useWorkplace } from "@/contexts/WorkplaceContext";
 import { AlertTriangle, CheckCircle2, Circle, Search, MapPin, Globe, Eye, Lock, ShieldAlert, Clock, PlayCircle, X, FileWarning } from "lucide-react";
 import dynamic from "next/dynamic";
-import SuspectManager from "@/components/SuspectManager";
 
 const MapViewer = dynamic(() => import("@/components/MapViewer"), { ssr: false });
 
-type TabType = "global_evac" | "local_evac" | "missing" | "suspects" | "history";
+type TabType = "global_evac" | "local_evac" | "missing" | "history";
 
 export default function EmergencyDashboard() {
   const { user } = useAuth();
@@ -460,7 +459,7 @@ export default function EmergencyDashboard() {
                                   </div>
                                   <div>
                                     <span style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: "0.5rem", textTransform: "uppercase" }}>Mensagem</span>
-                                    <p style={{ margin: 0, fontSize: "0.95rem", lineHeight: 1.5, color: "var(--color-text-primary)", whiteSpace: "pre-wrap" }}>
+                                    <p style={{ margin: 0, fontSize: "0.95rem", lineHeight: 1.5, color: "var(--color-text-primary)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                                       {activeIncident.message}
                                     </p>
                                   </div>
@@ -516,14 +515,9 @@ export default function EmergencyDashboard() {
       
       <div style={{ borderBottom: "1px solid var(--color-border)", padding: "0 1rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", gap: "1rem", overflowX: "auto" }}>
-          {isSuperadmin && (
-            <TabButton id="global_evac" icon={Globe} label="Evacuação Total" color="var(--color-text-secondary)" activeColor="var(--color-danger)" />
-          )}
+          <TabButton id="global_evac" icon={Globe} label="Evacuação Total" color="var(--color-text-secondary)" activeColor="var(--color-danger)" />
           <TabButton id="local_evac" icon={MapPin} label="Alerta de Zona" color="var(--color-text-secondary)" activeColor="#f97316" />
-          {isSuperadmin && (
-            <TabButton id="missing" icon={Eye} label="Pessoa Desaparecida" color="var(--color-text-secondary)" activeColor="#eab308" />
-          )}
-          <TabButton id="suspects" icon={Search} label="Suspeitos" color="var(--color-text-secondary)" activeColor="#a855f7" />
+          <TabButton id="missing" icon={Eye} label="Pessoa Desaparecida" color="var(--color-text-secondary)" activeColor="#eab308" />
           <TabButton id="history" icon={Clock} label="Histórico" color="var(--color-text-secondary)" activeColor="var(--color-primary)" />
         </div>
         <div style={{ display: "flex", gap: "1rem" }}>
@@ -538,9 +532,9 @@ export default function EmergencyDashboard() {
         </div>
       </div>
 
-      <div style={{ padding: "1rem", flex: 1, overflowY: "auto" }}>
+      <div style={{ padding: "1rem", flex: 1, minWidth: 0, overflowY: "auto" }}>
         
-        {activeTab === "global_evac" && isSuperadmin && (
+        {activeTab === "global_evac" && (
           <div className="animate-fade-in">
              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
                <div style={{ maxWidth: "600px" }}>
@@ -550,7 +544,7 @@ export default function EmergencyDashboard() {
                  </p>
                </div>
 
-               {globalEmergency && globalAlertType === "evacuation" ? (
+               {isSuperadmin && (globalEmergency && globalAlertType === "evacuation" ? (
                  <button onClick={toggleGlobal} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.75rem 1.5rem", background: "transparent", border: "2px solid var(--color-danger)", color: "var(--color-danger)", borderRadius: "var(--radius-md)", fontWeight: 600, cursor: "pointer", fontSize: "0.95rem" }}>
                    DESATIVAR ALERTA GLOBAL
                  </button>
@@ -559,7 +553,7 @@ export default function EmergencyDashboard() {
                    <ShieldAlert size={18} />
                    INICIAR EVACUAÇÃO TOTAL
                  </button>
-               )}
+               ))}
              </div>
 
              {globalEmergency && globalAlertType === "evacuation" ? (
@@ -600,7 +594,7 @@ export default function EmergencyDashboard() {
                       </p>
                     </div>
 
-                    {workplaceEmergency ? (
+                    {user?.role === "superadmin" && (workplaceEmergency ? (
                       <button onClick={toggleWorkplace} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.75rem 1.5rem", background: "transparent", border: "2px solid #f97316", color: "#f97316", borderRadius: "var(--radius-md)", fontWeight: 600, cursor: "pointer", fontSize: "0.95rem" }}>
                         DESATIVAR ALERTA LOCAL
                       </button>
@@ -609,7 +603,7 @@ export default function EmergencyDashboard() {
                         <MapPin size={18} />
                         INICIAR ALERTA DE ZONA
                       </button>
-                    )}
+                    ))}
                   </div>
 
                   {globalEmergency && (
@@ -638,79 +632,79 @@ export default function EmergencyDashboard() {
           </div>
         )}
 
-        {activeTab === "missing" && isSuperadmin && (
+        {activeTab === "missing" && (
           <div className="animate-fade-in">
-             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "2rem" }}>
-               <div style={{ maxWidth: "600px" }}>
-                 <h2 style={{ fontSize: "1.15rem", fontWeight: 700, margin: "0 0 0.25rem 0", color: "var(--color-text-primary)" }}>Pessoas Desaparecidas</h2>
-                 <p style={{ color: "var(--color-text-secondary)", lineHeight: 1.4, margin: 0, fontSize: "0.85rem" }}>
-                   Pode haver várias buscas em simultâneo. Inicie uma nova busca para alertar toda a equipa.
-                 </p>
-               </div>
-               <button 
-                 onClick={() => setShowMissingForm(true)}
-                 style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.75rem 1.5rem", background: "#eab308", color: "#000", border: "none", borderRadius: "var(--radius-full)", fontWeight: 700, cursor: "pointer", fontSize: "0.9rem" }}
-               >
-                 <span style={{ fontSize: "1.2rem" }}>+</span> NOVO ALERTA
-               </button>
-             </div>
+             {showMissingForm ? (
+                <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)", animation: "slideUp 0.3s ease-out", display: "flex", flexDirection: "column", marginBottom: "1.5rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1.25rem", borderBottom: "1px solid var(--color-border)" }}>
+                    <h3 style={{ margin: 0, fontSize: "1.15rem", display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--color-text-primary)" }}>
+                      <Search size={22} color="#eab308" />
+                      Nova Pessoa Desaparecida
+                    </h3>
+                    <button onClick={() => setShowMissingForm(false)} style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", cursor: "pointer", padding: "0.25rem" }}>
+                      <X size={22} />
+                    </button>
+                  </div>
+                  
+                  <div style={{ padding: "1.25rem", maxWidth: "800px" }}>
+                    <div style={{ marginBottom: "1.25rem" }}>
+                       <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600, color: "var(--color-text-primary)", fontSize: "0.95rem" }}>Descrição Completa (Obrigatório)</label>
+                       <textarea 
+                         className="input" 
+                         rows={4} 
+                         value={missingDesc} 
+                         onChange={e => setMissingDesc(e.target.value)} 
+                         placeholder="Ex: Criança, aprox. 5 anos, t-shirt azul do porto, chora e procura pela mãe..."
+                         style={{ width: "100%", padding: "0.85rem", background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", color: "var(--color-text-primary)", resize: "vertical", fontSize: "0.9rem" }}
+                       />
+                    </div>
 
-             {showMissingForm && (
-                <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000, padding: "1rem" }}>
-                  <div style={{ background: "var(--color-bg)", width: "100%", maxWidth: "600px", borderRadius: "var(--radius-xl)", overflow: "hidden", animation: "slideUp 0.3s ease-out" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1.5rem", borderBottom: "1px solid var(--color-border)" }}>
-                      <h3 style={{ margin: 0, fontSize: "1.25rem", display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--color-text-primary)" }}>
-                        <Search size={24} color="#eab308" />
-                        Nova Pessoa Desaparecida
-                      </h3>
-                      <button onClick={() => setShowMissingForm(false)} style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", cursor: "pointer" }}>
-                        <X size={24} />
+                    <div style={{ marginBottom: "1.5rem" }}>
+                       <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600, color: "var(--color-text-primary)", fontSize: "0.95rem" }}>Fotografia de Referência (Opcional mas recomendado)</label>
+                       <input 
+                         type="file" 
+                         accept="image/*" 
+                         onChange={e => setMissingPhoto(e.target.files?.[0] || null)} 
+                         style={{ width: "100%", padding: "0.6rem", background: "var(--color-bg)", border: "1px dashed var(--color-border)", borderRadius: "var(--radius-md)", color: "var(--color-text-secondary)", fontSize: "0.9rem" }} 
+                       />
+                    </div>
+
+                    <div style={{ display: "flex", gap: "0.75rem" }}>
+                      <button onClick={() => setShowMissingForm(false)} style={{ flex: 1, minWidth: 0, padding: "0.75rem", background: "transparent", color: "var(--color-text-primary)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", fontWeight: 700, cursor: "pointer", fontSize: "0.95rem" }}>
+                        CANCELAR
+                      </button>
+                      <button 
+                         onClick={triggerMissingPerson} 
+                         disabled={uploading || !missingDesc} 
+                         style={{ 
+                           flex: 2, display: "flex", justifyContent: "center", alignItems: "center", gap: "0.5rem", padding: "0.75rem", 
+                           background: (uploading || !missingDesc) ? "var(--color-bg)" : "#eab308", 
+                           color: (uploading || !missingDesc) ? "var(--color-text-tertiary)" : "#000", 
+                           border: "none", borderRadius: "var(--radius-md)", fontWeight: 800, cursor: (uploading || !missingDesc) ? "not-allowed" : "pointer", fontSize: "0.95rem" 
+                         }}
+                       >
+                        <Eye size={20} />
+                        {uploading ? "A DISPARAR ALERTA..." : "DISPARAR ALERTA"}
                       </button>
                     </div>
-                    
-                    <div style={{ padding: "1.5rem" }}>
-                      <div style={{ marginBottom: "1.5rem" }}>
-                         <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600, color: "var(--color-text-primary)" }}>Descrição Completa (Obrigatório)</label>
-                         <textarea 
-                           className="input" 
-                           rows={4} 
-                           value={missingDesc} 
-                           onChange={e => setMissingDesc(e.target.value)} 
-                           placeholder="Ex: Criança, aprox. 5 anos, t-shirt azul do porto, chora e procura pela mãe..."
-                           style={{ width: "100%", padding: "1rem", background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", color: "var(--color-text-primary)", resize: "vertical" }}
-                         />
-                      </div>
-
-                      <div style={{ marginBottom: "2.5rem" }}>
-                         <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600, color: "var(--color-text-primary)" }}>Fotografia de Referência (Opcional mas recomendado)</label>
-                         <input 
-                           type="file" 
-                           accept="image/*" 
-                           onChange={e => setMissingPhoto(e.target.files?.[0] || null)} 
-                           style={{ width: "100%", padding: "0.75rem", background: "var(--color-surface)", border: "1px dashed var(--color-border)", borderRadius: "var(--radius-md)", color: "var(--color-text-secondary)" }} 
-                         />
-                      </div>
-
-                      <div style={{ display: "flex", justifyContent: "flex-end", gap: "1rem" }}>
-                        <button onClick={() => setShowMissingForm(false)} style={{ padding: "0.85rem 1.5rem", background: "transparent", color: "var(--color-text-primary)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", fontWeight: 600, cursor: "pointer" }}>
-                          Cancelar
-                        </button>
-                        <button 
-                           onClick={triggerMissingPerson} 
-                           disabled={uploading || !missingDesc} 
-                           style={{ 
-                             display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.85rem 2rem", 
-                             background: (uploading || !missingDesc) ? "var(--color-surface)" : "#eab308", 
-                             color: (uploading || !missingDesc) ? "var(--color-text-tertiary)" : "#000", 
-                             border: "none", borderRadius: "var(--radius-md)", fontWeight: 700, cursor: (uploading || !missingDesc) ? "not-allowed" : "pointer" 
-                           }}
-                         >
-                          <Eye size={20} />
-                          {uploading ? "A DISPARAR..." : "DISPARAR ALERTA"}
-                        </button>
-                      </div>
-                    </div>
                   </div>
+                </div>
+             ) : (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "2rem" }}>
+                  <div style={{ maxWidth: "600px" }}>
+                    <h2 style={{ fontSize: "1.15rem", fontWeight: 700, margin: "0 0 0.25rem 0", color: "var(--color-text-primary)" }}>Pessoas Desaparecidas</h2>
+                    <p style={{ color: "var(--color-text-secondary)", lineHeight: 1.4, margin: 0, fontSize: "0.85rem" }}>
+                      Pode haver várias buscas em simultâneo. Inicie uma nova busca para alertar toda a equipa.
+                    </p>
+                  </div>
+                  {isSuperadmin && (
+                  <button 
+                    onClick={() => setShowMissingForm(true)}
+                    style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.75rem 1.5rem", background: "#eab308", color: "#000", border: "none", borderRadius: "var(--radius-full)", fontWeight: 700, cursor: "pointer", fontSize: "0.9rem" }}
+                  >
+                    <span style={{ fontSize: "1.2rem" }}>+</span> NOVO ALERTA
+                  </button>
+                  )}
                 </div>
              )}
 
@@ -733,13 +727,13 @@ export default function EmergencyDashboard() {
                           {am.photoUrl && (
                             <img src={am.photoUrl} alt="Missing" style={{ width: "120px", height: "120px", objectFit: "cover", borderRadius: "var(--radius-md)" }} />
                           )}
-                          <div style={{ flex: 1 }}>
+                          <div style={{ flex: 1, minWidth: 0}}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                               <div>
                                 <span style={{ display: "inline-block", background: "#eab308", color: "#000", padding: "0.25rem 0.5rem", borderRadius: "var(--radius-full)", fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.5rem" }}>
                                   Iniciado às {new Date(am.startTime).toLocaleTimeString("pt-PT")}
                                 </span>
-                                <p style={{ margin: 0, color: "var(--color-text-primary)", fontSize: "1rem", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{am.description}</p>
+                                <p style={{ margin: 0, color: "var(--color-text-primary)", fontSize: "1rem", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{am.description}</p>
                               </div>
                               <button onClick={() => closeMissingPerson(am.id)} style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 1rem", background: "var(--color-bg)", border: "2px solid #eab308", color: "#eab308", borderRadius: "var(--radius-md)", fontWeight: 700, cursor: "pointer", fontSize: "0.85rem" }}>
                                 FECHAR OCORRÊNCIA
@@ -758,11 +752,6 @@ export default function EmergencyDashboard() {
            </div>
          )}
 
-         {activeTab === "suspects" && (
-           <div className="animate-fade-in">
-             <SuspectManager />
-           </div>
-         )}
 
          {activeTab === "history" && (
           <div className="animate-fade-in">
@@ -828,7 +817,7 @@ export default function EmergencyDashboard() {
                             {item.resolution && (
                                 <div style={{ background: "rgba(16, 185, 129, 0.05)", padding: "1rem", borderRadius: "var(--radius-md)", marginTop: "1rem", borderLeft: "4px solid #10b981" }}>
                                   <span style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#10b981", textTransform: "uppercase", marginBottom: "0.25rem" }}>Desfecho da Ocorrência</span>
-                                  <p style={{ margin: 0, color: "var(--color-text-primary)", fontSize: "0.95rem", whiteSpace: "pre-wrap" }}>{item.resolution}</p>
+                                  <p style={{ margin: 0, color: "var(--color-text-primary)", fontSize: "0.95rem", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{item.resolution}</p>
                                 </div>
                              )}
 

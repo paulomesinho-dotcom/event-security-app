@@ -1,4 +1,6 @@
-"use client";
+const fs = require('fs');
+
+const fileContent = `"use client";
 
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
@@ -157,7 +159,7 @@ export default function TeamManager() {
             <button 
               onClick={() => setActiveTab("equipa")}
               style={{
-                padding: "0.25rem 0.75rem", borderRadius: "var(--radius-full)", border: "none", cursor: "pointer", fontSize: "0.875rem", fontWeight: 600, transition: "all 0.2s",
+                padding: "0.5rem 1.25rem", borderRadius: "var(--radius-full)", border: "none", cursor: "pointer", fontSize: "0.875rem", fontWeight: 600, transition: "all 0.2s",
                 background: activeTab === "equipa" ? "var(--color-primary)" : "transparent",
                 color: activeTab === "equipa" ? "white" : "var(--color-text-secondary)"
               }}
@@ -167,7 +169,7 @@ export default function TeamManager() {
             <button 
               onClick={() => setActiveTab("banco")}
               style={{
-                padding: "0.25rem 0.75rem", borderRadius: "var(--radius-full)", border: "none", cursor: "pointer", fontSize: "0.875rem", fontWeight: 600, transition: "all 0.2s",
+                padding: "0.5rem 1.25rem", borderRadius: "var(--radius-full)", border: "none", cursor: "pointer", fontSize: "0.875rem", fontWeight: 600, transition: "all 0.2s",
                 background: activeTab === "banco" ? "var(--color-primary)" : "transparent",
                 color: activeTab === "banco" ? "white" : "var(--color-text-secondary)"
               }}
@@ -208,7 +210,7 @@ export default function TeamManager() {
       </div>
 
       {/* List Container */}
-      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0", paddingBottom: "2rem" }}>
+      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.5rem", paddingBottom: "2rem" }}>
         
         {activeTab === "equipa" && (
           <>
@@ -219,14 +221,11 @@ export default function TeamManager() {
                 {(searchQuery || selectedCongregation) && (
                    <button onClick={() => { setSearchQuery(""); setSelectedCongregation(""); }} className="btn btn-secondary" style={{ marginTop: "1rem" }}>Limpar Filtros</button>
                 )}
-                {!searchQuery && !selectedCongregation && (
-                   <button onClick={() => setActiveTab("banco")} className="btn btn-primary" style={{ marginTop: "1rem" }}>Ir para Adicionar Vigias</button>
-                )}
               </div>
             ) : (
               <>
                 {/* Headers */}
-                <div style={{ display: "grid", gridTemplateColumns: "2.5fr 2fr 1fr 1.5fr", padding: "0.75rem 1rem", color: "var(--color-text-secondary)", fontSize: "0.85rem", fontWeight: 600, borderBottom: "1px solid var(--color-border)", marginBottom: "0" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 2fr 1fr 1fr", padding: "0.5rem 1.25rem", color: "var(--color-text-secondary)", fontSize: "0.8rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid var(--color-border)", marginBottom: "0.5rem" }}>
                   <div>Nome do Vigia</div>
                   <div>Congregação</div>
                   <div>Estado</div>
@@ -234,17 +233,17 @@ export default function TeamManager() {
                 </div>
 
                 {filteredEquipa.map(v => (
-                  <div key={v.id} style={{ display: "grid", gridTemplateColumns: "2.5fr 2fr 1fr 1.5fr", alignItems: "center", padding: "0.6rem 1rem", background: "transparent", borderBottom: "1px solid var(--color-border)", borderRadius: "0", transition: "background 0.1s", cursor: "pointer" }} className="hover-row">
-                    <div style={{ fontWeight: 600, color: "var(--color-text-primary)", fontSize: "0.85rem" }}>{v.name}</div>
-                    <div style={{ color: "var(--color-text-secondary)", fontSize: "0.8rem" }}>{v.congregation || "N/A"}</div>
+                  <div key={v.id} style={{ display: "grid", gridTemplateColumns: "2fr 2fr 1fr 1fr", alignItems: "center", padding: "1rem 1.25rem", background: "var(--color-surface)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", transition: "all 0.2s", cursor: "default" }} className="hover-row">
+                    <div style={{ fontWeight: 600, color: "var(--color-text-primary)", fontSize: "0.95rem" }}>{v.name}</div>
+                    <div style={{ color: "var(--color-text-secondary)", fontSize: "0.9rem" }}>{v.congregation || "N/A"}</div>
                     <div>
-                       <span style={{ background: "rgba(16, 185, 129, 0.15)", color: "#10b981", padding: "0.15rem 0.4rem", borderRadius: "var(--radius-sm)", fontSize: "0.65rem", fontWeight: 700 }}>EFETIVO</span>
+                       <span style={{ background: "rgba(16, 185, 129, 0.15)", color: "#10b981", padding: "0.3rem 0.6rem", borderRadius: "var(--radius-full)", fontSize: "0.75rem", fontWeight: 700 }}>EFETIVO</span>
                     </div>
                     <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
-                      <button onClick={() => { setLoanVigiaId(v.id); setShowLoanModal(true); }} className="action-btn ghost-action" style={{ padding: "0.35rem 0.85rem", fontSize: "0.75rem", borderRadius: "100px", fontWeight: 600, background: "rgba(168, 85, 247, 0.08)", color: "var(--color-primary)", display: "flex", alignItems: "center" }} title="Ceder a outro Workplace">
+                      <button onClick={() => { setLoanVigiaId(v.id); setShowLoanModal(true); }} className="btn" style={{ padding: "0.4rem 0.8rem", fontSize: "0.8rem", background: "rgba(255,255,255,0.05)", color: "var(--color-text-primary)" }} title="Ceder a outro Workplace">
                         <ArrowRightLeft size={16} style={{ marginRight: "0.3rem" }} /> Ceder
                       </button>
-                      <button onClick={() => removeFromTeam(v.id)} className="action-btn ghost-danger-action" style={{ padding: "0.35rem 0.6rem", fontSize: "0.75rem", borderRadius: "100px", fontWeight: 600, background: "rgba(239, 68, 68, 0.08)", color: "#ef4444", display: "flex", alignItems: "center" }} title="Remover da equipa">
+                      <button onClick={() => removeFromTeam(v.id)} className="btn" style={{ padding: "0.4rem 0.8rem", fontSize: "0.8rem", background: "rgba(239, 68, 68, 0.1)", color: "#ef4444" }} title="Remover da equipa">
                         <Trash2 size={16} />
                       </button>
                     </div>
@@ -252,11 +251,11 @@ export default function TeamManager() {
                 ))}
 
                 {filteredCedidos.map(({vigia, loan}) => (
-                  <div key={loan.id} style={{ display: "grid", gridTemplateColumns: "2.5fr 2fr 1fr 1.5fr", alignItems: "center", padding: "0.6rem 1rem", background: "rgba(168, 85, 247, 0.03)", borderBottom: "1px solid var(--color-border)", borderRadius: "0", transition: "background 0.1s", cursor: "pointer" }} className="hover-row">
-                    <div style={{ fontWeight: 600, color: "var(--color-primary)", fontSize: "0.85rem" }}>{vigia.name}</div>
-                    <div style={{ color: "var(--color-text-secondary)", fontSize: "0.8rem" }}>{vigia.congregation || "N/A"}</div>
+                  <div key={loan.id} style={{ display: "grid", gridTemplateColumns: "2fr 2fr 1fr 1fr", alignItems: "center", padding: "1rem 1.25rem", background: "linear-gradient(90deg, rgba(168, 85, 247, 0.05) 0%, var(--color-surface) 100%)", borderRadius: "var(--radius-md)", border: "1px solid rgba(168, 85, 247, 0.3)", transition: "all 0.2s", cursor: "default" }} className="hover-row">
+                    <div style={{ fontWeight: 600, color: "var(--color-primary)", fontSize: "0.95rem" }}>{vigia.name}</div>
+                    <div style={{ color: "var(--color-text-secondary)", fontSize: "0.9rem" }}>{vigia.congregation || "N/A"}</div>
                     <div>
-                       <span style={{ background: "rgba(168, 85, 247, 0.15)", color: "var(--color-primary)", padding: "0.15rem 0.4rem", borderRadius: "var(--radius-sm)", fontSize: "0.65rem", fontWeight: 700 }}>CEDIDO (Empréstimo)</span>
+                       <span style={{ background: "rgba(168, 85, 247, 0.15)", color: "var(--color-primary)", padding: "0.3rem 0.6rem", borderRadius: "var(--radius-full)", fontSize: "0.75rem", fontWeight: 700 }}>CEDIDO (Empréstimo)</span>
                     </div>
                     <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
                       <span style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", fontStyle: "italic" }}>Gerido noutro local</span>
@@ -278,7 +277,7 @@ export default function TeamManager() {
             ) : (
               <>
                 {/* Headers */}
-                <div style={{ display: "grid", gridTemplateColumns: "2.5fr 2fr 1fr 1.5fr", padding: "0.75rem 1rem", color: "var(--color-text-secondary)", fontSize: "0.85rem", fontWeight: 600, borderBottom: "1px solid var(--color-border)", marginBottom: "0" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 2fr 1fr 1fr", padding: "0.5rem 1.25rem", color: "var(--color-text-secondary)", fontSize: "0.8rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid var(--color-border)", marginBottom: "0.5rem" }}>
                   <div>Nome do Vigia</div>
                   <div>Congregação</div>
                   <div>Estado</div>
@@ -286,14 +285,14 @@ export default function TeamManager() {
                 </div>
 
                 {filteredLivres.map(v => (
-                  <div key={v.id} style={{ display: "grid", gridTemplateColumns: "2.5fr 2fr 1fr 1.5fr", alignItems: "center", padding: "0.6rem 1rem", background: "transparent", borderBottom: "1px solid var(--color-border)", borderRadius: "0", transition: "background 0.1s", cursor: "pointer" }} className="hover-row">
-                    <div style={{ fontWeight: 600, color: "var(--color-text-primary)", fontSize: "0.85rem" }}>{v.name}</div>
-                    <div style={{ color: "var(--color-text-secondary)", fontSize: "0.8rem" }}>{v.congregation || "N/A"}</div>
+                  <div key={v.id} style={{ display: "grid", gridTemplateColumns: "2fr 2fr 1fr 1fr", alignItems: "center", padding: "1rem 1.25rem", background: "var(--color-surface)", borderRadius: "var(--radius-md)", border: "1px dashed var(--color-border)", transition: "all 0.2s" }} className="hover-row">
+                    <div style={{ fontWeight: 600, color: "var(--color-text-primary)", fontSize: "0.95rem" }}>{v.name}</div>
+                    <div style={{ color: "var(--color-text-secondary)", fontSize: "0.9rem" }}>{v.congregation || "N/A"}</div>
                     <div>
-                       <span style={{ background: "rgba(255, 255, 255, 0.1)", color: "var(--color-text-secondary)", padding: "0.15rem 0.4rem", borderRadius: "var(--radius-sm)", fontSize: "0.65rem", fontWeight: 700 }}>LIVRE</span>
+                       <span style={{ background: "rgba(255, 255, 255, 0.1)", color: "var(--color-text-secondary)", padding: "0.3rem 0.6rem", borderRadius: "var(--radius-full)", fontSize: "0.75rem", fontWeight: 700 }}>LIVRE</span>
                     </div>
                     <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
-                      <button onClick={() => addToTeam(v.id)} className="action-btn primary-action" style={{ padding: "0.35rem 1rem", fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "0.4rem", borderRadius: "100px", fontWeight: 600, background: "var(--color-primary)", color: "white" }}>
+                      <button onClick={() => addToTeam(v.id)} className="btn btn-primary" style={{ padding: "0.4rem 1.25rem", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
                         <UserPlus size={16} /> Adicionar à Equipa
                       </button>
                     </div>
@@ -305,49 +304,13 @@ export default function TeamManager() {
         )}
       </div>
 
-      <style dangerouslySetInnerHTML={{__html: `
+      <style>{`
         .hover-row:hover {
-          background: rgba(128,128,128,0.08) !important;
-        }
-        .action-btn {
-          border: none;
-          cursor: pointer;
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .ghost-action {
-          padding: 0.35rem 0.85rem;
-          font-size: 0.75rem;
-          font-weight: 600;
-          border-radius: 100px;
-          background: transparent;
-          color: var(--color-text-secondary);
-        }
-        .ghost-action:hover {
-          background: rgba(255,255,255,0.05);
-          color: var(--color-text-primary);
-        }
-        .ghost-danger-action {
-          padding: 0.35rem 0.6rem;
-          font-size: 0.75rem;
-          border-radius: 100px;
-          background: transparent;
-          color: rgba(239, 68, 68, 0.6);
-        }
-        .ghost-danger-action:hover {
-          background: rgba(239, 68, 68, 0.1);
-          color: #ef4444;
-        }
-        .primary-action {
-          box-shadow: 0 2px 8px rgba(168, 85, 247, 0.2);
-        }
-        .primary-action:hover {
-          box-shadow: 0 4px 12px rgba(168, 85, 247, 0.35);
+          background: rgba(255,255,255,0.03) !important;
           transform: translateY(-1px);
+          box-shadow: var(--shadow-sm);
         }
-      `}} />
+      `}</style>
 
       {/* Modal de Cedência */}
       {showLoanModal && (
@@ -358,7 +321,7 @@ export default function TeamManager() {
                  <button onClick={() => setShowLoanModal(false)} style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", cursor: "pointer" }}><X size={20}/></button>
                </div>
                
-               <p style={{ fontSize: "0.85rem", color: "var(--color-text-secondary)", marginBottom: "1.5rem", lineHeight: 1.5 }}>
+               <p style={{ fontSize: "0.95rem", color: "var(--color-text-secondary)", marginBottom: "1.5rem", lineHeight: 1.5 }}>
                  O Vigia selecionado ficará disponível para ser alocado em turnos no Workplace de destino. Ele continuará associado a si.
                </p>
                
@@ -380,3 +343,7 @@ export default function TeamManager() {
     </div>
   );
 }
+`;
+
+fs.writeFileSync('src/components/TeamManager.tsx', fileContent);
+console.log("TeamManager rewritten successfully");

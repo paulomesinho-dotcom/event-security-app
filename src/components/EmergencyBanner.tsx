@@ -1,6 +1,7 @@
 "use client";
+import { playAlertBeeps, stopAlertBeeps } from "@/lib/audioAlert";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db } from "@/lib/firebase";
 import { doc, onSnapshot, setDoc, collection, query, where, addDoc } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -14,6 +15,7 @@ export default function EmergencyBanner() {
 
   // Global State
   const [globalEmergency, setGlobalEmergency] = useState(false);
+  const prevGlobalEmergencyRef = useRef(false);
   const [globalAlertType, setGlobalAlertType] = useState("evacuation");
   const [globalAlertDetails, setGlobalAlertDetails] = useState<any>(null);
   const [globalAlertAck, setGlobalAlertAck] = useState<string[]>([]);
@@ -49,7 +51,14 @@ export default function EmergencyBanner() {
       where("status", "==", "active"),
       where("alertType", "==", "missing_person")
     );
+    let initialLoadMP = true;
     const unsub = onSnapshot(q, (snap) => {
+      if (!initialLoadMP) {
+        snap.docChanges().forEach(change => {
+          if (change.type === "added" && change.doc.data().initiatedBy !== user?.uid && user?.role !== "superadmin") playAlertBeeps();
+        });
+      }
+      initialLoadMP = false;
       const msgs: any[] = [];
       snap.forEach(d => msgs.push({ id: d.id, ...d.data() }));
       setActiveMissingPersons(msgs);
@@ -74,9 +83,14 @@ export default function EmergencyBanner() {
 
   // Listen to Global Emergency
   useEffect(() => {
+    let initialLoadGlobal = true;
     const unsub = onSnapshot(doc(db, "settings", "global"), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
+        if (!initialLoadGlobal && data.globalEmergency === true && !prevGlobalEmergencyRef.current) {
+          if (data.globalAlertCreatedBy !== user?.uid && user?.role !== "superadmin") playAlertBeeps();
+        }
+        prevGlobalEmergencyRef.current = data.globalEmergency === true;
         setGlobalEmergency(data.globalEmergency === true);
         setGlobalAlertType(data.globalAlertType || "evacuation");
         setGlobalAlertDetails(data.globalAlertDetails || null);
@@ -85,6 +99,7 @@ export default function EmergencyBanner() {
       } else {
         setGlobalEmergency(false);
       }
+      initialLoadGlobal = false;
     });
     return () => unsub();
   }, []);
@@ -92,7 +107,16 @@ export default function EmergencyBanner() {
   // Listen to ALL Local Emergencies (efficient query)
   useEffect(() => {
     const q = query(collection(db, "workplaces"), where("isEmergency", "==", true));
+    let initialLoadLocal = true;
     const unsub = onSnapshot(q, (snap) => {
+      if (!initialLoadLocal) {
+        snap.docChanges().forEach(change => {
+          if (change.type === "added" && change.doc.data().emergencyCreatedBy !== user?.uid && user?.role !== "superadmin") {
+             playAlertBeeps();
+          }
+        });
+      }
+      initialLoadLocal = false;
       const ems: any[] = [];
       snap.forEach(d => ems.push({ id: d.id, ...d.data() }));
       setLocalEmergencies(ems);
@@ -145,6 +169,7 @@ export default function EmergencyBanner() {
   if (!isBlockingEmergency && !hasActiveBanners && !hasNonBlockingNotifications && !showMissingDetails && !showIncidentModal && !showSuspectDetails && visibleSuspects.length === 0) return null;
 
   const handleAcknowledge = async () => {
+    stopAlertBeeps(); // Added by patch in handleAcknowledge
     try {
       if (isMissingPersonBlock && missingPersonData) {
         await setDoc(doc(db, "emergency_history", missingPersonData.id), { alertAck: [...(missingPersonData.alertAck || []), user.uid] }, { merge: true });
@@ -159,6 +184,7 @@ export default function EmergencyBanner() {
   };
 
   const handleEvacuated = async () => {
+    stopAlertBeeps(); // Added by patch in handleEvacuated
     try {
       if (globalEmergency) {
         await setDoc(doc(db, "settings", "global"), { globalEvacAck: [...globalEvacAck, user.uid] }, { merge: true });
@@ -211,7 +237,7 @@ export default function EmergencyBanner() {
   // 1. NON-BLOCKING NOTIFICATIONS (Toast style at the top)
   if (hasNonBlockingNotifications) {
     return (
-      <div style={{ position: "fixed", top: 10, left: 10, right: 10, zIndex: 9999, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+      <div onClick={() => stopAlertBeeps()} style={{ position: "fixed", top: 10, left: 10, right: 10, zIndex: 9999, display: "flex", flexDirection: "column", gap: "0.5rem", cursor: "pointer" }}>
         {localEmergencies.map(em => (
           <div key={em.id} style={{ background: "rgba(239, 68, 68, 0.95)", backdropFilter: "blur(10px)", color: "white", padding: "1rem", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-lg)", display: "flex", alignItems: "center", gap: "1rem", animation: "slideDown 0.3s ease-out" }}>
             <div style={{ background: "white", color: "#ef4444", borderRadius: "50%", padding: "0.5rem" }}>
@@ -220,6 +246,7 @@ export default function EmergencyBanner() {
             <div>
               <div style={{ fontWeight: 800, fontSize: "0.9rem" }}>⚠️ EMERGÊNCIA NO LOCAL</div>
               <div style={{ fontSize: "1rem" }}>{em.name}</div>
+                <div style={{ fontSize: "0.75rem", marginTop: "0.25rem", opacity: 0.8 }}>(Clique em qualquer parte deste aviso para silenciar o alarme)</div>
               {user.role === "vigia" && em.id === activeWorkplaceId && !hasActiveShift && (
                 <div style={{ fontSize: "0.8rem", marginTop: "0.25rem", opacity: 0.9 }}>Recebeu esta notificação porque não tem um turno ativo neste local.</div>
               )}
@@ -291,7 +318,7 @@ export default function EmergencyBanner() {
                 {missingPersonData.photoUrl && (
                    <img src={missingPersonData.photoUrl} alt="Desaparecido" style={{ width: "100%", maxHeight: "250px", objectFit: "contain", borderRadius: "var(--radius-md)", marginBottom: "1rem", background: "white" }} />
                 )}
-                <p style={{ fontSize: "1rem", fontWeight: 500, margin: 0, textAlign: "left", whiteSpace: "pre-wrap", color: "var(--color-text-primary)" }}>
+                <p style={{ fontSize: "1rem", fontWeight: 500, margin: 0, textAlign: "left", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "var(--color-text-primary)" }}>
                   {missingPersonData.description}
                 </p>
               </div>
@@ -408,7 +435,7 @@ export default function EmergencyBanner() {
 
       {/* Incident Modal Overlay */}
       {showIncidentModal && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", zIndex: 99999, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
           <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "500px", padding: "2rem", position: "relative" }}>
             <button onClick={() => setShowIncidentModal(false)} style={{ position: "absolute", top: "1.5rem", right: "1.5rem", background: "transparent", border: "none", color: "var(--color-text-secondary)", cursor: "pointer" }}>
               <X size={24} />
@@ -435,11 +462,11 @@ export default function EmergencyBanner() {
             <div style={{ marginBottom: "2rem" }}>
               <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600 }}>Fotografia (Opcional)</label>
               <div style={{ display: "flex", gap: "0.5rem" }}>
-                <label style={{ flex: 1, padding: "0.75rem", background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}>
+                <label style={{ flex: 1, minWidth: 0, padding: "0.75rem", background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}>
                   <Camera size={16} /> Câmara
                   <input type="file" accept="image/*" capture="environment" onChange={e => setIncidentPhoto(e.target.files?.[0] || null)} style={{ display: "none" }} />
                 </label>
-                <label style={{ flex: 1, padding: "0.75rem", background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}>
+                <label style={{ flex: 1, minWidth: 0, padding: "0.75rem", background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}>
                   <ImageIcon size={16} /> Galeria
                   <input type="file" accept="image/*" onChange={e => setIncidentPhoto(e.target.files?.[0] || null)} style={{ display: "none" }} />
                 </label>
@@ -465,7 +492,7 @@ export default function EmergencyBanner() {
 
       {/* Missing Details Modal Overlay */}
       {showMissingDetails && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", zIndex: 99999, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
           <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "500px", padding: "2rem", position: "relative", maxHeight: "90vh", overflowY: "auto" }}>
             <button onClick={() => setShowMissingDetails(null)} style={{ position: "absolute", top: "1.5rem", right: "1.5rem", background: "transparent", border: "none", color: "var(--color-text-secondary)", cursor: "pointer" }}>
               <X size={24} />
@@ -481,7 +508,7 @@ export default function EmergencyBanner() {
                     {m.photoUrl && (
                       <img src={m.photoUrl} alt="Desaparecido" style={{ width: "100%", maxHeight: "200px", objectFit: "contain", borderRadius: "var(--radius-md)", marginBottom: "1rem", background: "white" }} />
                     )}
-                    <p style={{ margin: 0, fontSize: "0.95rem", whiteSpace: "pre-wrap", color: "var(--color-text-primary)" }}>{m.description}</p>
+                    <p style={{ margin: 0, fontSize: "0.95rem", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "var(--color-text-primary)" }}>{m.description}</p>
                   </div>
                 ))}
               </div>
@@ -490,7 +517,7 @@ export default function EmergencyBanner() {
                 {showMissingDetails.photoUrl && (
                   <img src={showMissingDetails.photoUrl} alt="Desaparecido" style={{ width: "100%", maxHeight: "250px", objectFit: "contain", borderRadius: "var(--radius-md)", marginBottom: "1rem", background: "white" }} />
                 )}
-                <p style={{ margin: 0, fontSize: "1rem", whiteSpace: "pre-wrap", color: "var(--color-text-primary)" }}>{showMissingDetails.description}</p>
+                <p style={{ margin: 0, fontSize: "1rem", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "var(--color-text-primary)" }}>{showMissingDetails.description}</p>
               </div>
             )}
           </div>
@@ -499,7 +526,7 @@ export default function EmergencyBanner() {
 
       {/* Suspect Details Modal Overlay */}
       {showSuspectDetails && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", zIndex: 99999, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
           <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-xl)", width: "100%", maxWidth: "500px", padding: "2rem", position: "relative", maxHeight: "90vh", overflowY: "auto" }}>
             <button onClick={() => setShowSuspectDetails(null)} style={{ position: "absolute", top: "1.5rem", right: "1.5rem", background: "transparent", border: "none", color: "var(--color-text-secondary)", cursor: "pointer" }}>
               <X size={24} />
@@ -515,7 +542,7 @@ export default function EmergencyBanner() {
                     {m.photoUrl && (
                       <img src={m.photoUrl} alt="Suspeito" style={{ width: "100%", maxHeight: "200px", objectFit: "cover", borderRadius: "var(--radius-md)", marginBottom: "1rem" }} />
                     )}
-                    <p style={{ margin: 0, fontSize: "0.95rem", whiteSpace: "pre-wrap", color: "var(--color-text-primary)", fontWeight: 500 }}>{m.description}</p>
+                    <p style={{ margin: 0, fontSize: "0.95rem", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "var(--color-text-primary)", fontWeight: 500 }}>{m.description}</p>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "1rem", fontSize: "0.85rem" }}>
                       <div><strong style={{ color: "var(--color-text-secondary)" }}>Visto em:</strong><br/>{m.initialLocation} <a href={`https://maps.google.com/?q=${m.lat && m.lng ? `${m.lat},${m.lng}` : encodeURIComponent('Porto ' + m.initialLocation)}`} target="_blank" rel="noreferrer" style={{ color: "#a855f7", textDecoration: "underline", marginLeft: "4px" }}>(Ver no Mapa)</a></div>
                       <div><strong style={{ color: "var(--color-text-secondary)" }}>Direção:</strong><br/>{m.direction || "Desconhecida"}</div>
@@ -528,7 +555,7 @@ export default function EmergencyBanner() {
                 {showSuspectDetails.photoUrl && (
                   <img src={showSuspectDetails.photoUrl} alt="Suspeito" style={{ width: "100%", maxHeight: "250px", objectFit: "cover", borderRadius: "var(--radius-md)", marginBottom: "1rem" }} />
                 )}
-                <p style={{ margin: 0, fontSize: "1rem", whiteSpace: "pre-wrap", color: "var(--color-text-primary)", fontWeight: 500 }}>{showSuspectDetails.description}</p>
+                <p style={{ margin: 0, fontSize: "1rem", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "var(--color-text-primary)", fontWeight: 500 }}>{showSuspectDetails.description}</p>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "1rem", fontSize: "0.85rem" }}>
                   <div><strong style={{ color: "var(--color-text-secondary)" }}>Visto em:</strong><br/>{showSuspectDetails.initialLocation} {showSuspectDetails.lat && showSuspectDetails.lng && <a href={`https://maps.google.com/?q=${showSuspectDetails.lat},${showSuspectDetails.lng}`} target="_blank" rel="noreferrer" style={{ color: "#a855f7", textDecoration: "underline", marginLeft: "4px" }}>(Ver no Mapa)</a>}</div>
                   <div><strong style={{ color: "var(--color-text-secondary)" }}>Direção:</strong><br/>{showSuspectDetails.direction || "Desconhecida"}</div>

@@ -6,7 +6,7 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, addDoc, orderBy } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWorkplace } from "@/contexts/WorkplaceContext";
-import { MapPin, Clock, CheckCircle2, PlayCircle, ShieldCheck, Bell, X, Check, CheckCheck } from "lucide-react";
+import { MapPin, Clock, CheckCircle2, PlayCircle, ShieldCheck, Bell, X, Check, CheckCheck, AlertTriangle } from "lucide-react";
 
 interface Shift {
   id: string;
@@ -66,26 +66,48 @@ export default function CaptainSummaryTable() {
     if (!selectedPersonId || !notifMessage.trim()) return;
     setSendingNotif(true);
     try {
-      // 1. Save to Firestore (for in-app notification when app is open)
-      await addDoc(collection(db, "notifications"), {
-        vigiaId: selectedPersonId,
-        message: notifMessage.trim(),
-        read: false,
-        dismissed: false,
-        createdAt: new Date().toISOString()
-      });
-
-      // 2. Send FCM push notification (works when app is closed/background)
-      const response = await fetch("/api/send-notification", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      if (selectedPersonId === "all") {
+        const uniqueVigias = Array.from(new Set(shifts.map(s => s.personId)));
+        await Promise.all(uniqueVigias.map(async (vid) => {
+          await addDoc(collection(db, "notifications"), {
+            vigiaId: vid,
+            message: notifMessage.trim(),
+            read: false,
+            dismissed: false,
+            createdAt: new Date().toISOString()
+          });
+          await fetch("/api/send-notification", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              vigiaId: vid,
+              title: "Mensagem do Capitão",
+              message: notifMessage.trim()
+            })
+          });
+        }));
+      } else {
+        // 1. Save to Firestore (for in-app notification when app is open)
+        await addDoc(collection(db, "notifications"), {
           vigiaId: selectedPersonId,
-          title: "Mensagem do Capitão",
-          message: notifMessage.trim()
-        })
-      });
-      if (!response.ok) throw new Error("Falha ao enviar");
+          message: notifMessage.trim(),
+          read: false,
+          dismissed: false,
+          createdAt: new Date().toISOString()
+        });
+
+        // 2. Send FCM push notification (works when app is closed/background)
+        const response = await fetch("/api/send-notification", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            vigiaId: selectedPersonId,
+            title: "Mensagem do Capitão",
+            message: notifMessage.trim()
+          })
+        });
+        if (!response.ok) throw new Error("Falha ao enviar");
+      }
       alert("Notificação enviada com sucesso!");
       setShowNotifModal(false);
       setNotifMessage("");
@@ -189,6 +211,22 @@ export default function CaptainSummaryTable() {
 
       </div>
 
+      {shifts.length > 0 && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "1rem" }}>
+           <button 
+             onClick={() => {
+               setSelectedPersonId("all");
+               setNotifMessage("");
+               setShowNotifModal(true);
+             }}
+             className="btn btn-primary"
+             style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 1rem", fontSize: "0.875rem" }}
+           >
+             <Bell size={16} /> Notificar Todos na Zona
+           </button>
+        </div>
+      )}
+
       {shifts.length === 0 ? (
         <div style={{ padding: "3rem", textAlign: "center", background: "var(--color-surface)", borderRadius: "var(--radius-lg)", border: "1px dashed var(--color-border)" }}>
           <p style={{ color: "var(--color-text-secondary)" }}>Ainda não existem turnos atribuídos na sua zona.</p>
@@ -209,6 +247,34 @@ export default function CaptainSummaryTable() {
               {shifts.map(shift => {
                 const vigiaName = users[shift.personId] || "Desconhecido";
                 
+                let lateness = null;
+                if (shift.status !== "completed") {
+                  const match = shift.time.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+                  if (match) {
+                    const now = new Date();
+                    const currentTotal = now.getHours() * 60 + now.getMinutes();
+                    const [startH, startM] = match[1].split(":").map(Number);
+                    const [endH, endM] = match[2].split(":").map(Number);
+                    const startTotal = startH * 60 + startM;
+                    const endTotal = endH * 60 + endM;
+                    const crossesMidnight = endTotal < startTotal;
+
+                    if (shift.status === "pending") {
+                      if (!crossesMidnight) {
+                        if (currentTotal >= startTotal) lateness = "Atrasado a Iniciar";
+                      } else {
+                        if (currentTotal >= startTotal || currentTotal < endTotal) lateness = "Atrasado a Iniciar";
+                      }
+                    } else if (shift.status === "active") {
+                      if (!crossesMidnight) {
+                        if (currentTotal >= endTotal) lateness = "Atrasado a Terminar";
+                      } else {
+                        if (currentTotal >= endTotal && currentTotal < startTotal) lateness = "Atrasado a Terminar";
+                      }
+                    }
+                  }
+                }
+
                 return (
                   <tr key={shift.id}>
                     
@@ -240,16 +306,23 @@ export default function CaptainSummaryTable() {
 
                     {/* Estado */}
                     <td style={{ textAlign: "right" }}>
-                      <span style={{ 
-                        display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.35rem 0.75rem", borderRadius: "var(--radius-full)", fontSize: "0.75rem", fontWeight: 600,
-                        background: shift.status === "active" ? "rgba(16, 185, 129, 0.1)" : shift.status === "completed" ? "var(--color-bg)" : "rgba(245, 158, 11, 0.1)",
-                        color: shift.status === "active" ? "var(--color-success)" : shift.status === "completed" ? "var(--color-text-secondary)" : "#f59e0b"
-                       }}>
-                        {shift.status === "pending" && <Clock size={12} />}
-                        {shift.status === "active" && <PlayCircle size={12} />}
-                        {shift.status === "completed" && <CheckCircle2 size={12} />}
-                        {shift.status === "pending" ? "Pendente" : shift.status === "active" ? "Em Curso" : "Terminado"}
-                      </span>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.35rem" }}>
+                        <span style={{ 
+                          display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.35rem 0.75rem", borderRadius: "var(--radius-full)", fontSize: "0.75rem", fontWeight: 600,
+                          background: shift.status === "active" ? "rgba(16, 185, 129, 0.1)" : shift.status === "completed" ? "var(--color-bg)" : "rgba(245, 158, 11, 0.1)",
+                          color: shift.status === "active" ? "var(--color-success)" : shift.status === "completed" ? "var(--color-text-secondary)" : "#f59e0b"
+                        }}>
+                          {shift.status === "pending" && <Clock size={12} />}
+                          {shift.status === "active" && <PlayCircle size={12} />}
+                          {shift.status === "completed" && <CheckCircle2 size={12} />}
+                          {shift.status === "pending" ? "Pendente" : shift.status === "active" ? "Em Curso" : "Terminado"}
+                        </span>
+                        {lateness && (
+                          <span style={{ fontSize: "0.7rem", color: "var(--color-danger)", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.2rem", animation: "pulse 2s infinite" }}>
+                            <AlertTriangle size={10} /> {lateness}
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     {/* Ações */}
@@ -293,7 +366,9 @@ export default function CaptainSummaryTable() {
             </h3>
             
             <p style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)", marginBottom: "1rem" }}>
-              Escreva a mensagem que deseja enviar para o dispositivo do Vigia <strong>{users[selectedPersonId]}</strong>.
+              {selectedPersonId === "all" 
+                 ? "Escreva a mensagem que deseja enviar para TODOS os Vigias desta zona." 
+                 : <>Escreva a mensagem que deseja enviar para o dispositivo do Vigia <strong>{users[selectedPersonId]}</strong>.</>}
             </p>
 
             {vigiaNotifications.length > 0 && (

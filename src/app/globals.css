@@ -311,6 +311,43 @@ input, textarea, select {
   }
 }
 
+/* ===== React Quill Overrides ===== */
+.quill-wrapper {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  border-radius: var(--radius-md);
+}
+.quill-wrapper .ql-toolbar {
+  border-top-left-radius: var(--radius-md);
+  border-top-right-radius: var(--radius-md);
+  background: #f8f9fa;
+  border-color: var(--color-border);
+}
+.quill-wrapper .ql-container {
+  border-bottom-left-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
+  border-color: var(--color-border);
+  min-height: 150px;
+  font-family: inherit;
+  font-size: 0.875rem;
+}
+
+.quill-content-preview { word-break: normal; overflow-wrap: break-word; hyphens: auto; }
+.quill-content-preview * { max-width: 100%; }
+.quill-content-preview ul, .quill-content-preview ol {
+  padding-left: 1.5rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.quill-content-preview p {
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+.quill-content-preview a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
 /* ===== Animations ===== */
 @keyframes slideDown {
   from { opacity: 0; transform: translateY(-10px); }

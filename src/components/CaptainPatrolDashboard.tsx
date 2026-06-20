@@ -170,9 +170,58 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export default function VigiaDashboard() {
+export default function CaptainPatrolDashboard({ onOpenMap, isSidebarOpen }: { onOpenMap?: (locId: string) => void, isSidebarOpen?: boolean }) {
   const { user } = useAuth();
   const [shifts, setShifts] = useState<Shift[]>([]);
+
+  const [teamShifts, setTeamShifts] = useState<any[]>([]);
+  const [teamVigias, setTeamVigias] = useState<Record<string, any>>({});
+  const [locators, setLocators] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    const unsub = onSnapshot(collection(db, "locators"), (snap) => {
+      const arr: any[] = [];
+      snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
+      setLocators(arr);
+    });
+    return () => unsub();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const unsub = onSnapshot(collection(db, "users"), (snap) => {
+      const users: Record<string, any> = {};
+      snap.forEach((d) => {
+         users[d.id] = { id: d.id, ...d.data() };
+      });
+      setTeamVigias(users);
+    });
+    return () => unsub();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, "shifts"), where("status", "in", ["pending", "active"]));
+    const unsub = onSnapshot(q, (snap) => {
+      const sfts: any[] = [];
+      snap.forEach((d) => {
+        const s = { id: d.id, ...d.data() } as any;
+        if (user.role === "superadmin" || s.workplaceId === user.workplaceId) {
+          sfts.push(s);
+        }
+      });
+      setTeamShifts(sfts);
+    });
+    return () => unsub();
+  }, [user]);
+
+  // Derive
+  const userIds = new Set(teamShifts.filter((s: any) => s.status === 'active' || s.status === 'pending').map((s: any) => s.vigiaId || s.personId || s.userId).filter(Boolean));
+  const activeTeamShifts = teamShifts.filter(s => s.status === "active");
+  const pendingTeamShifts = teamShifts.filter(s => s.status === "pending");
+
+
   const [workplaces, setWorkplaces] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -698,154 +747,111 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
         </button>
       )}
 
-      {shifts.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "4rem 1.5rem", background: "var(--color-surface)", borderRadius: "var(--radius-lg)", border: "1px dashed var(--color-border)" }}>
-          <Calendar size={44} style={{ color: "var(--color-text-tertiary)", marginBottom: "1rem" }} />
-          <p style={{ color: "var(--color-text-secondary)", fontSize: "0.95rem" }}>Ainda não tem turnos atribuídos.<br />Aguarde a atribuição pelo seu Capitão.</p>
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
-          {/* Removed inline action buttons to put them in fixed bottom bar */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
+          {/* Secção Principal: Estado da Equipa */}
+          <div style={{ marginTop: "1rem" }}>
+            <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--color-text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Equipa em Patrulha (Ativos)</span>
+            {activeTeamShifts && activeTeamShifts.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.5rem" }}>
+                {activeTeamShifts.map(shift => {
+                   
+                   const locator = locators.find(l => l.id === shift.locatorId);
+                   const vigia = teamVigias[shift.vigiaId || shift.personId || shift.userId];
+                   
+                   // Check if overdue
+                   let isOverdue = false;
+                   const now = new Date();
+                   const nowMin = now.getHours() * 60 + now.getMinutes();
+                   const startStr = getShiftStartTime(shift);
+                   if (startStr) {
+                       const [h, m] = startStr.split(":").map(Number);
+                       const startMin = h * 60 + m;
+                       if (startMin > 0 && startMin < nowMin) {
+                           isOverdue = true;
+                       }
+                   }
 
-          {activeShift && (
-            <section>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
-                <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#10b981", animation: "pulse 2s infinite" }} />
-                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--color-text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Turno em Curso</span>
-              </div>
-              <div style={{ background: "linear-gradient(135deg, #151F31 0%, #1e3a5f 100%)", borderRadius: "var(--radius-lg)", padding: "1.25rem", color: "white", boxShadow: "0 8px 32px rgba(21,31,49,0.35)", position: "relative", overflow: "hidden" }}>
-                <div style={{ position: "absolute", top: "-20px", right: "-20px", width: "120px", height: "120px", borderRadius: "50%", background: "rgba(255,255,255,0.04)", pointerEvents: "none" }} />
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.75rem", marginBottom: "1rem" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", flex: 1, minWidth: 0 }}>
-                    <div style={{ background: "rgba(16,185,129,0.2)", padding: "0.55rem", borderRadius: "50%", flexShrink: 0 }}>
-                      <MapPin size={20} color="#34d399" />
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <p style={{ margin: 0, fontSize: "0.65rem", color: "rgba(255,255,255,0.45)", fontWeight: 600, letterSpacing: "0.05em" }}>
-                        {activeWorkplace ? `${activeWorkplace.name.toUpperCase()} - ` : ""}POSIÇíO ATUAL
-                      </p>
-                      {activeShiftLocation ? (
-                        <>
-                          <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {activeShiftLocation.local || activeShift.locatorName}
-                          </h3>
-                          {(activeShiftLocation.sublocal || activeShiftLocation.subsublocal) && (
-                            <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.85rem", color: "rgba(255,255,255,0.7)", fontWeight: 600 }}>
-                              {[activeShiftLocation.sublocal, activeShiftLocation.subsublocal].filter(Boolean).join(" - ")}
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{activeShift.locatorName}</h3>
-                      )}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", flexShrink: 0 }}>
-                    <button onClick={() => viewMap(activeShift)} style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 0.8rem", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "var(--radius-md)", color: "white", cursor: "pointer", fontSize: "0.8rem", fontWeight: 600, whiteSpace: "nowrap" }}>
-                      <MapPin size={14} /> Planta
-                    </button>
-                    <button onClick={() => updateShiftStatus(activeShift, "completed")} style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 0.8rem", background: "#ef4444", border: "none", borderRadius: "var(--radius-md)", color: "white", cursor: "pointer", fontSize: "0.8rem", fontWeight: 700, boxShadow: "0 4px 12px rgba(239,68,68,0.35)", whiteSpace: "nowrap" }}>
-                      <Square size={14} fill="currentColor" /> Terminar
-                    </button>
-                  </div>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                  {activeShift.name && (
-                    <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "var(--radius-md)", padding: "0.6rem 0.75rem" }}>
-                      <p style={{ margin: 0, fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.15rem", fontWeight: 600 }}>DESIGNAÇíO</p>
-                      <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 600 }}>{activeShift.name}</p>
-                    </div>
-                  )}
-                  {activeShift.time && (
-                    <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "var(--radius-md)", padding: "0.6rem 0.75rem" }}>
-                      <p style={{ margin: 0, fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.15rem", fontWeight: 600 }}>HORÁRIO</p>
-                      <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 600 }}>{activeShift.time}</p>
-                    </div>
-                  )}
-                  {activeShift.days && (
-                    <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "var(--radius-md)", padding: "0.6rem 0.75rem" }}>
-                      <p style={{ margin: 0, fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.15rem", fontWeight: 600 }}>DATA</p>
-                      <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 600 }}>{activeShift.days}</p>
-                    </div>
-                  )}
-                  <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "var(--radius-md)", padding: "0.6rem 0.75rem" }}>
-                    <p style={{ margin: 0, fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.15rem", fontWeight: 600 }}>INICIADO</p>
-                    <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 600 }}>{new Date(activeShift.startTime).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}</p>
-                  </div>
-                </div>
-              </div>
-            </section>
-          )}
-
-          {pendingShifts.length > 0 && (
-            <section>
-              <span style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "var(--color-text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "0.75rem" }}>Próximos Turnos</span>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
-                {pendingShifts.map(shift => {
-                  const timeCheck = isWithinShiftTime(shift);
-                  const startTime = getShiftStartTime(shift);
-                  const disabled = !!activeShift || !timeCheck.allowed;
-                  return (
-                    <div key={shift.id} style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "var(--shadow-sm)" }}>
-                      <div style={{ height: "3px", background: timeCheck.allowed ? "linear-gradient(90deg, #10b981, #34d399)" : "linear-gradient(90deg, #f59e0b, #fbbf24)" }} />
-                      <div style={{ padding: "1rem 1.1rem" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.6rem" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
-                            <MapPin size={16} color="var(--color-primary)" style={{ flexShrink: 0 }} />
-                            <div>
-                              <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700 }}>
-                                {shift.local || shift.locatorName}
-                              </h4>
-                              {(shift.sublocal || shift.subsublocal) && (
-                                <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.75rem", color: "var(--color-text-secondary)" }}>
-                                  {[shift.sublocal, shift.subsublocal].filter(Boolean).join(" - ")}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                          <StatusBadge status="pending" />
-                        </div>
-
-                        {/* Hora de início destacada */}
-                        {startTime && (
-                          <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.5rem", background: "var(--color-primary-light)", padding: "0.3rem 0.7rem", borderRadius: "var(--radius-md)" }}>
-                            <Clock size={13} color="var(--color-primary)" />
-                            <span style={{ fontSize: "0.88rem", fontWeight: 700, color: "var(--color-primary)" }}>Início: {startTime}</span>
-                          </div>
-                        )}
-
-                        {/* Meta info */}
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem 0.9rem", marginBottom: "0.75rem" }}>
-                          {shift.name && <span style={{ fontSize: "0.78rem", color: "var(--color-text-secondary)" }}>{shift.name}</span>}
-                          {shift.days && <span style={{ fontSize: "0.78rem", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "0.2rem" }}><Calendar size={11} />{shift.days}</span>}
-                          {shift.time && <span style={{ fontSize: "0.78rem", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "0.2rem" }}><Clock size={11} />{shift.time}</span>}
-                        </div>
-
-                        {/* Restriction warning */}
-                        {!timeCheck.allowed && (
-                          <div style={{ display: "flex", alignItems: "flex-start", gap: "0.4rem", padding: "0.5rem 0.65rem", background: "rgba(245,158,11,0.08)", borderRadius: "var(--radius-md)", marginBottom: "0.75rem" }}>
-                            <AlertTriangle size={13} color="#d97706" style={{ flexShrink: 0, marginTop: "0.1rem" }} />
-                            <span style={{ fontSize: "0.76rem", color: "#d97706", fontWeight: 500 }}>{timeCheck.reason}</span>
-                          </div>
-                        )}
-
-                        <div style={{ display: "flex", gap: "0.5rem" }}>
-                          <button onClick={() => viewMap(shift)} className="btn btn-secondary" style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35rem", fontSize: "0.82rem", padding: "0.5rem" }}>
-                            <MapPin size={14} /> Planta
-                          </button>
-                          <button onClick={() => updateShiftStatus(shift, "active")} disabled={disabled} style={{ flex: 2, padding: "0.6rem", fontSize: "0.85rem", fontWeight: 700, border: "none", borderRadius: "var(--radius-md)", cursor: disabled ? "not-allowed" : "pointer", background: disabled ? "#e5e7eb" : "#10b981", color: disabled ? "#6b7280" : "white" }}>
-                            <Play size={14} fill="currentColor" style={{ display: "inline-block", marginRight: "0.3rem" }} /> Iniciar Turno
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
+                   return (
+                     <div key={shift.id} onClick={() => {
+                        const plan = activeWorkplace?.plans?.find((p: any) => p.id === locator?.planId);
+                        if (plan && locator) {
+                           setMapModalData({ planImageUrl: plan.imageUrl, pinX: locator.x, pinY: locator.y, title: locator.name || "Local" });
+                        }
+                     }} style={{ background: "var(--color-surface)", padding: "1rem", borderRadius: "var(--radius-lg)", boxShadow: "0 4px 20px rgba(0,0,0,0.1)", border: isOverdue ? "2px solid #ef4444" : "1px solid rgba(56, 189, 248, 0.3)", position: "relative", overflow: "hidden", cursor: "pointer" }}>
+                       <div style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: "4px", background: "var(--color-primary)" }} />
+                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                         <div>
+                           <div style={{ fontSize: "1rem", fontWeight: 700, color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                             <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: isOverdue ? "#ef4444" : "var(--color-primary)", boxShadow: isOverdue ? "0 0 10px #ef4444" : "0 0 10px var(--color-primary)" }} />
+                             {vigia?.name || "Vigia Desconhecido"}
+                             {isOverdue && <span style={{fontSize: "0.6rem", background: "#ef4444", color: "white", padding: "0.1rem 0.3rem", borderRadius: "4px", marginLeft: "0.3rem"}}>EM ATRASO</span>}
+                           </div>
+                           <div style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)", marginTop: "0.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                             <MapPin size={14} />
+                             {locator?.name || "A carregar local..."}
+                           </div>
+                         </div>
+                       </div>
+                     </div>
+                   );
                 })}
               </div>
-            </section>
-          )}
+            ) : (
+              <div style={{ marginTop: "0.5rem", background: "var(--color-surface)", padding: "1.25rem", borderRadius: "var(--radius-lg)", textAlign: "center", border: "1px solid var(--color-border)" }}>
+                <p style={{ color: "var(--color-text-secondary)", fontSize: "0.95rem" }}>Nenhum vigia em patrulha neste momento.</p>
+              </div>
+            )}
+          </div>
+
+          <div style={{ marginTop: "1.5rem" }}>
+            <span style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "var(--color-text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "0.75rem" }}>Próximos Turnos (A Iniciar)</span>
+            {pendingTeamShifts && pendingTeamShifts.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                {pendingTeamShifts.map((shift, idx) => {
+                   
+                   const locator = locators.find(l => l.id === shift.locatorId);
+                   const vigia = teamVigias[shift.vigiaId || shift.personId || shift.userId];
+                   
+                   // Check if overdue
+                   let isOverdue = false;
+                   const now = new Date();
+                   const nowMin = now.getHours() * 60 + now.getMinutes();
+                   const startStr = getShiftStartTime(shift);
+                   if (startStr) {
+                       const [h, m] = startStr.split(":").map(Number);
+                       const startMin = h * 60 + m;
+                       if (startMin > 0 && startMin < nowMin) {
+                           isOverdue = true;
+                       }
+                   }
+
+                   return (
+                     <div key={shift.id} onClick={() => {
+                        const plan = activeWorkplace?.plans?.find((p: any) => p.id === locator?.planId);
+                        if (plan && locator) {
+                           setMapModalData({ planImageUrl: plan.imageUrl, pinX: locator.x, pinY: locator.y, title: locator.name || "Local" });
+                        }
+                     }} style={{ background: "var(--color-surface)", padding: "0.875rem 1rem", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
+                       <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                         <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-secondary)" }}>
+                           <Clock size={16} />
+                         </div>
+                         <div>
+                           <div style={{ fontWeight: 600, color: "var(--color-text-primary)", fontSize: "0.95rem" }}>{vigia?.name || "Vigia Desconhecido"}</div>
+                           <div style={{ fontSize: "0.8rem", color: "var(--color-text-tertiary)" }}>{locator?.name || "Local Desconhecido"} • {shift.time}</div>
+                         </div>
+                       </div>
+                     </div>
+                   );
+                })}
+              </div>
+            ) : (
+              <div style={{ background: "var(--color-surface)", padding: "1.25rem", borderRadius: "var(--radius-md)", textAlign: "center", border: "1px solid var(--color-border)" }}>
+                <p style={{ color: "var(--color-text-secondary)", fontSize: "0.9rem" }}>Não existem turnos agendados.</p>
+              </div>
+            )}
+          </div>
         </div>
-      )}
     </div>
 
       
@@ -1292,29 +1298,31 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
                  </div>
                  <button 
                     onClick={async () => {
-                      if (!activeWorkplace?.captainId) return;
-                      const msg = prompt("Que mensagem deseja enviar ao capitão?");
+                      const msg = prompt("Que mensagem deseja enviar à equipa?");
                       if (!msg) return;
 
                       setIsSendingNotify(true);
                       try {
-                        const res = await fetch("/api/send-notification", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            vigiaId: activeWorkplace.captainId,
-                            title: `Mensagem de ${user?.name || "Vigia"} (${activeWorkplace.name})`,
-                            message: msg
-                          })
-                        });
-                        const data = await res.json();
-                        if (res.ok && !data.error) {
-                          alert("Notificação enviada com sucesso!");
-                        } else if (data.code === "NO_FCM_TOKEN") {
-                           alert("Mensagem registada, mas o capitão não tem notificações ativas no dispositivo.");
-                        } else {
-                           alert(data.error || "Erro ao enviar notificação.");
+                        const vigiaIdsToNotify = Array.from(userIds);
+                        let successCount = 0;
+                        for (const targetVigiaId of vigiaIdsToNotify) {
+                           const res = await fetch("/api/send-notification", {
+                             method: "POST",
+                             headers: { "Content-Type": "application/json" },
+                             body: JSON.stringify({
+                               vigiaId: targetVigiaId,
+                               title: `Mensagem do Capitão (${activeWorkplace.name})`,
+                               message: msg
+                             })
+                           });
+                           if (res.ok) {
+                             const data = await res.json();
+                             if (!data.error && data.code !== "NO_FCM_TOKEN") {
+                               successCount++;
+                             }
+                           }
                         }
+                        alert(`Notificação enviada com sucesso a ${successCount} vigia(s).`);
                       } catch (err) {
                         console.error(err);
                         alert("Erro ao contactar servidor.");
@@ -1322,17 +1330,17 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
                         setIsSendingNotify(false);
                       }
                     }}
-                    disabled={isSendingNotify || !activeWorkplace.captainId}
+                    disabled={isSendingNotify || userIds.size === 0}
                     style={{
                        background: "var(--color-surface)", border: "1px solid var(--color-border)",
                        padding: "0.5rem 1rem", borderRadius: "var(--radius-full)", fontSize: "0.8rem",
                        color: "#38bdf8", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.5rem",
-                       cursor: (isSendingNotify || !activeWorkplace.captainId) ? "not-allowed" : "pointer",
-                       opacity: (isSendingNotify || !activeWorkplace.captainId) ? 0.6 : 1
+                       cursor: (isSendingNotify || userIds.size === 0) ? "not-allowed" : "pointer",
+                       opacity: (isSendingNotify || userIds.size === 0) ? 0.6 : 1
                     }}
                  >
                     <Bell size={14} />
-                    {isSendingNotify ? "A enviar..." : "Notificar Capitão"}
+                    {isSendingNotify ? "A enviar..." : "Notificar Equipa"}
                  </button>
               </div>
             )}
@@ -1379,8 +1387,7 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
 
     {/* BOTTOM NAVIGATION BAR — flex sibling of scrollable content */}
     <div className="vigia-app-bottom-bar" style={{ zIndex: 20000 }}>
-      {(activeShift || pendingShifts.length > 0) && (
-        <>
+
           {zelloLink && (
             <a href={zelloLink} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.3rem", textDecoration: "none", flex: "1 0 auto" }}>
               <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: "rgba(249, 115, 22, 0.15)", border: "1.5px solid rgba(249,115,22,0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "#f97316" }}>
@@ -1404,8 +1411,7 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
             </div>
             <span style={{ fontSize: "0.65rem", fontWeight: 700, color: "#ef4444" }}>Ocorrência</span>
           </button>
-        </>
-      )}
+
       <button onClick={() => setActivePanel(activePanel === 'info' ? null : 'info')} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.3rem", background: "none", border: "none", cursor: "pointer", flex: "1 0 auto" }}>
         <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: "var(--color-bg)", border: "1.5px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-secondary)", position: "relative" }}>
           <Info size={20} />

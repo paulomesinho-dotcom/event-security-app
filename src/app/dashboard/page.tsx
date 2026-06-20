@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { LogOut, LayoutDashboard, Users, Map, Settings, Clock, MapPin, Building, Plus, Search, HelpCircle, Menu, ChevronDown, AlertTriangle, FileWarning, UserX } from "lucide-react";
+import { LogOut, LayoutDashboard, Users, Map, Settings, Clock, MapPin, Building, Plus, Search, HelpCircle, Menu, ChevronDown, AlertTriangle, FileWarning, UserX, Info } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import { updatePassword } from "firebase/auth";
 import { collection, query, where, getDocs, getDoc, doc } from "firebase/firestore";
@@ -23,7 +23,13 @@ import EmergencyBanner from "@/components/EmergencyBanner";
 import EmergencyDashboard from "@/components/EmergencyDashboard";
 import IncidentManager from "@/components/IncidentManager";
 import SuspectManager from "@/components/SuspectManager";
+import InformationManager from "@/components/InformationManager";
+import InformationModal from "@/components/InformationModal";
+import CaptainPatrolDashboard from "@/components/CaptainPatrolDashboard";
 import { useWorkplace } from "@/contexts/WorkplaceContext";
+import dynamic from "next/dynamic";
+
+const MapViewer = dynamic(() => import("@/components/MapViewer"), { ssr: false });
 
 function WorkplaceSwitcher() {
   const { workplaces, activeWorkplaceId, setActiveWorkplaceId, loadingWorkplaces } = useWorkplace();
@@ -120,12 +126,15 @@ function VigiaWorkplaceName() {
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
+  const { hasActiveShift, activeWorkplaceId } = useWorkplace();
   const router = useRouter();
   
   const [activeTab, setActiveTab] = useState("overview");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isPatrolMode, setIsPatrolMode] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showInfoModal, setShowInfoModal] = useState(false);
   const [newPass, setNewPass] = useState("");
   const [passMsg, setPassMsg] = useState("");
 
@@ -152,6 +161,11 @@ export default function DashboardPage() {
     if (!loading && !user) {
       router.push("/login");
     }
+    if (!loading && user && (user.role === "captain" || user.role === "superadmin")) {
+      if (window.innerWidth <= 768) {
+        setIsPatrolMode(true);
+      }
+    }
     // Set default tabs based on role
     if (user && activeTab === "overview") {
        if (user.role === "superadmin") setActiveTab("workplaces");
@@ -175,7 +189,7 @@ export default function DashboardPage() {
   if (user.role === "vigia") {
     return (
       <div className="vigia-app-root">
-        <EmergencyBanner />
+        {activeWorkplaceId ? <EmergencyBanner /> : null}
         <nav className="vigia-app-nav" style={{ 
           display: "flex", justifyContent: "space-between", padding: "0.85rem 1rem", 
           backgroundColor: "var(--color-surface)", borderBottom: "1px solid var(--color-border)", alignItems: "center"
@@ -189,7 +203,7 @@ export default function DashboardPage() {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
             <div style={{ textAlign: "right" }}>
-              <span style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", display: "block" }}>{user.name}</span>
+              <span style={{ fontSize: "0.8rem", color: "var(--color-primary)", fontWeight: 600 }}>{user.name}</span>
             </div>
             <button onClick={handleLogout} className="btn btn-secondary" style={{ padding: "0.4rem 0.65rem", fontSize: "0.8rem" }}><LogOut size={15} /></button>
           </div>
@@ -233,9 +247,37 @@ export default function DashboardPage() {
     );
   };
 
+  // If Captain/Superadmin is in Patrol Mode, render the Mobile Dashboard wrapper
+  if ((user.role === "captain" || user.role === "superadmin") && isPatrolMode) {
+    return (
+      <div className="vigia-app-root">
+        {activeWorkplaceId ? <EmergencyBanner /> : null}
+        <nav className="vigia-app-nav" style={{ 
+          display: "flex", justifyContent: "space-between", padding: "0.85rem 1rem", 
+          backgroundColor: "var(--color-surface)", borderBottom: "1px solid var(--color-border)", alignItems: "center"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
+            <Image src="/logo.jpg" alt="Porto 2026 Logo" width={44} height={44} style={{ borderRadius: "var(--radius-md)", objectFit: "cover", flexShrink: 0 }} />
+            <div>
+              <h1 style={{ fontSize: "1.2rem", color: "var(--color-primary)", fontWeight: 800, margin: 0, lineHeight: 1.1 }}>Porto 2026</h1>
+              <span style={{ fontSize: "0.72rem", color: "var(--color-text-secondary)", fontWeight: 500, marginTop: "0.1rem", display: "block" }}>
+                📍 MODO PATRULHA
+              </span>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <button onClick={() => setIsPatrolMode(false)} className="btn btn-secondary" style={{ padding: "0.4rem 0.65rem", fontSize: "0.75rem" }}>Gestão (PC)</button>
+            <button onClick={handleLogout} className="btn" style={{ padding: "0.4rem", fontSize: "0.75rem", background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: "var(--radius-md)" }} title="Terminar Sessão"><LogOut size={16} /></button>
+          </div>
+        </nav>
+        <CaptainPatrolDashboard />
+      </div>
+    );
+  }
+
   return (
     <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "var(--color-bg)", overflow: "hidden" }}>
-      <EmergencyBanner />
+      {activeWorkplaceId ? <EmergencyBanner /> : null}
       <div style={{ flex: 1, display: "flex", flexDirection: "row", overflow: "hidden" }}>
       
       {/* Mobile Sidebar Overlay */}
@@ -276,6 +318,7 @@ export default function DashboardPage() {
               <NavItem id="plans" icon={Map} label="Plantas & Escalas" />
               <NavItem id="incidents" icon={FileWarning} label="Ocorrências" />
               <NavItem id="suspects" icon={UserX} label="Suspeitos" />
+              <NavItem id="information" icon={Info} label="Informações" />
               <NavItem id="emergency" icon={AlertTriangle} label="Painel de Emergência" />
               <div style={{ height: "1px", background: "rgba(255,255,255,0.1)", margin: "0.5rem 1rem" }} />
               <NavItem id="summary" icon={LayoutDashboard} label="Resumo Global" />
@@ -307,7 +350,7 @@ export default function DashboardPage() {
 
           {/* User Welcome and Workplace Switcher */}
           <div style={{ flex: 1, margin: "0 1rem", fontSize: "1rem", color: "var(--color-text-secondary)", fontWeight: 500, display: "flex", alignItems: "center", gap: "1rem" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <div className="hidden-mobile" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
               <span className="hidden-mobile">Olá,</span>
               <span style={{ color: "var(--color-primary)", fontWeight: 600 }}>{user?.name || "Utilizador"}</span>
             </div>
@@ -316,6 +359,16 @@ export default function DashboardPage() {
 
           {/* User Actions Right */}
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            {(user?.role === "captain" || user?.role === "superadmin") && (
+               <button 
+                 onClick={() => setIsPatrolMode(true)}
+                 className="btn btn-primary"
+                 style={{ padding: "0.4rem 0.75rem", fontSize: "0.75rem", borderRadius: "100px", display: "flex", alignItems: "center", gap: "0.3rem" }}
+                 title="Ativar Modo Patrulha (Mobile)"
+               >
+                 <MapPin size={14} /> <span className="hidden-mobile">Modo Patrulha</span>
+               </button>
+            )}
             <HelpCircle size={24} color="var(--color-text-secondary)" style={{ cursor: "pointer", display: "none" }} className="hidden-mobile" />
             {user?.role === "superadmin" && (
               <div title="Configurações Globais" style={{ display: "flex", alignItems: "center" }}>
@@ -354,6 +407,7 @@ export default function DashboardPage() {
               {activeTab === 'locations' && "Estrutura de Locais"}
               {activeTab === 'incidents' && "Gestão de Ocorrências"}
               {activeTab === 'suspects' && "Gestão de Suspeitos"}
+              {activeTab === 'information' && "Informações"}
               {activeTab === 'summary' && "Resumo Global"}
             </h2>
 
@@ -374,6 +428,7 @@ export default function DashboardPage() {
                 {activeTab === "locations" && <LocationManager />}
                 {activeTab === "incidents" && <IncidentManager />}
                 {activeTab === "suspects" && <SuspectManager />}
+                {activeTab === "information" && <InformationManager readOnly={user.role !== "superadmin"} />}
                 {activeTab === "emergency" && <EmergencyDashboard />}
                 
                 {activeTab === "plans" && (

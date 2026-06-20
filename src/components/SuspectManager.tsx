@@ -101,11 +101,11 @@ export default function SuspectManager() {
                     )}
                     <div style={{ flex: 1, overflow: "hidden" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.2rem" }}>
-                        <p style={{ margin: 0, fontWeight: 600, fontSize: "0.9rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sus.description}</p>
+                        <p style={{ margin: 0, fontWeight: 600, fontSize: "0.9rem", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{sus.description}</p>
                       </div>
                       <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.75rem", color: "var(--color-text-secondary)" }}>
                         <span>{sus.initialLocation}</span>
-                        <span>Â·</span>
+                        <span>·</span>
                         <span>{new Date(sus.createdAt).toLocaleTimeString("pt-PT", {hour: "2-digit", minute:"2-digit"})}</span>
                       </div>
                     </div>
@@ -132,7 +132,7 @@ export default function SuspectManager() {
                     {selectedSuspect.status === "active" ? <AlertTriangle size={16} color="#a855f7" /> : (selectedSuspect.status === "resolved" ? <CheckCircle2 size={16} color="#10b981" /> : <X size={16} color="#ef4444" />)}
                     <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, lineHeight: 1.3, color: "var(--color-text-primary)" }}>{selectedSuspect.description}</h3>
                   </div>
-                  <span style={{ fontSize: "0.8rem", color: "#a855f7", fontWeight: 600 }}>Por {selectedSuspect.vigiaName} Â· {new Date(selectedSuspect.createdAt).toLocaleTimeString("pt-PT", {hour:"2-digit", minute:"2-digit"})}</span>
+                  <span style={{ fontSize: "0.8rem", color: "#a855f7", fontWeight: 600 }}>Por {selectedSuspect.vigiaName} · {new Date(selectedSuspect.createdAt).toLocaleTimeString("pt-PT", {hour:"2-digit", minute:"2-digit"})}</span>
                 </div>
               </div>
 
@@ -143,7 +143,7 @@ export default function SuspectManager() {
                 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", fontSize: "0.875rem", marginBottom: "1.5rem" }}>
                   <div style={{ background: "var(--color-bg)", padding: "0.6rem 0.8rem", borderRadius: "var(--radius-md)", borderLeft: "3px solid #a855f7" }}>
-                    <strong style={{ color: "#a855f7", display: "block", marginBottom: "0.2rem", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>ðŸ“ Local Inicial</strong>
+                    <strong style={{ color: "#a855f7", display: "block", marginBottom: "0.2rem", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>📍 Local Inicial</strong>
                     {selectedSuspect.initialLocation}
                     {selectedSuspect.planImageUrl && selectedSuspect.pinX && selectedSuspect.pinY && (
                       <div style={{ marginTop: "0.4rem" }}>
@@ -157,8 +157,8 @@ export default function SuspectManager() {
                     )}
                   </div>
                   <div style={{ background: "var(--color-bg)", padding: "0.6rem 0.8rem", borderRadius: "var(--radius-md)", borderLeft: "3px solid rgba(168,85,247,0.4)" }}>
-                    <strong style={{ color: "var(--color-text-secondary)", display: "block", marginBottom: "0.2rem", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>ðŸ§­ Direção</strong>
-                    {selectedSuspect.direction || "â€”"}
+                    <strong style={{ color: "var(--color-text-secondary)", display: "block", marginBottom: "0.2rem", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>🧭 Direção</strong>
+                    {selectedSuspect.direction || "—"}
                   </div>
                 </div>
                 
@@ -178,9 +178,14 @@ export default function SuspectManager() {
                         </div>
                         {u.message && <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--color-text-primary)" }}>{u.message}</p>}
                         {u.photoUrl && <img src={u.photoUrl} alt="Atualização" style={{ width: "100%", maxWidth: "200px", borderRadius: "var(--radius-md)", marginTop: "0.75rem" }} />}
-                        <a href={`https://maps.google.com/?q=${u.lat && u.lng ? `${u.lat},${u.lng}` : encodeURIComponent('Porto ' + selectedSuspect.initialLocation)}`} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", marginTop: "0.75rem", fontSize: "0.8rem", color: "#a855f7", textDecoration: "underline" }}>
-                          <MapPin size={14} /> Ver Local da Atualização
-                        </a>
+                        {(u.planImageUrl || selectedSuspect.planImageUrl) && (
+                          <button 
+                            onClick={() => setMapModalData({ planImageUrl: u.planImageUrl || selectedSuspect.planImageUrl, pinX: u.pinX || selectedSuspect.pinX, pinY: u.pinY || selectedSuspect.pinY, title: "Local da Atualização" })} 
+                            style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", marginTop: "0.75rem", fontSize: "0.8rem", color: "#a855f7", textDecoration: "underline", background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
+                          >
+                            <MapPin size={14} /> Ver Local na Planta
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}

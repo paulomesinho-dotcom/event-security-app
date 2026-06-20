@@ -43,6 +43,7 @@ export default function RootLayout({
         <AuthProvider>
           <WorkplaceProvider>
             {children}
+            
           </WorkplaceProvider>
         </AuthProvider>
       </body>

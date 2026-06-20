@@ -19,9 +19,10 @@ interface MapViewerProps {
   onLocatorClick?: (locator: Locator) => void;
   onLocatorDragEnd?: (locatorId: string, x: number, y: number) => void;
   isAddPinMode?: boolean;
+  isDragPinMode?: boolean;
 }
 
-export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLocatorClick, onLocatorDragEnd, isAddPinMode }: MapViewerProps) {
+export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLocatorClick, onLocatorDragEnd, isAddPinMode, isDragPinMode = false }: MapViewerProps) {
   const [scale, setScale] = useState(1.0);
   const [natSize, setNatSize] = useState({ w: 0, h: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
@@ -280,7 +281,7 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
                 key={loc.id}
                 onMouseDown={(e) => {
                   e.stopPropagation();
-                  if (!onLocatorDragEnd) return;
+                  if (!onLocatorDragEnd || !isDragPinMode) return;
                   setDraggingLocator({ id: loc.id, x: loc.x, y: loc.y });
                   isDragging.current = true;
                   setDragMoved(false);
@@ -291,7 +292,7 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
                 }}
                 onTouchStart={(e) => {
                   e.stopPropagation();
-                  if (!onLocatorDragEnd || e.touches.length > 1) return;
+                  if (!onLocatorDragEnd || !isDragPinMode || e.touches.length > 1) return;
                   setDraggingLocator({ id: loc.id, x: loc.x, y: loc.y });
                   isDragging.current = true;
                   setDragMoved(false);

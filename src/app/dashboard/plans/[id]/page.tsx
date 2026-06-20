@@ -60,6 +60,7 @@ export default function PlanDetailPage() {
 
   // Toggle Mode for adding pins
   const [isAddPinMode, setIsAddPinMode] = useState(false);
+  const [isDragPinMode, setIsDragPinMode] = useState(false);
 
   // Custom notification modal
   const [showNotifModal, setShowNotifModal] = useState(false);
@@ -346,24 +347,36 @@ export default function PlanDetailPage() {
           )}
         </div>
         {user?.role === "captain" && (
-          <button 
-             className={`btn ${isAddPinMode ? 'btn-danger' : 'btn-primary'}`}
-             onClick={() => setIsAddPinMode(!isAddPinMode)}
-             style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
-          >
-             {isAddPinMode ? "Cancelar Inserção" : "Adicionar Pino ao Mapa"}
-          </button>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button 
+               className={`btn ${isDragPinMode ? 'btn-warning' : 'btn-outline'}`}
+               onClick={() => setIsDragPinMode(!isDragPinMode)}
+               style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+            >
+               {isDragPinMode ? "Bloquear Pinos" : "Mover Pinos"}
+            </button>
+            <button 
+               className={`btn ${isAddPinMode ? 'btn-danger' : 'btn-primary'}`}
+               onClick={() => setIsAddPinMode(!isAddPinMode)}
+               style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+            >
+               {isAddPinMode ? "Cancelar Inserção" : "Adicionar Pino ao Mapa"}
+            </button>
+          </div>
         )}
       </div>
 
-      <MapViewer 
-         imageUrl={plan.imageUrl} 
-         locators={locators} 
-         onAddLocator={isAddPinMode ? handleAddLocatorClick : undefined} 
-         onLocatorClick={handleLocatorClick} 
-         onLocatorDragEnd={handleLocatorDragEnd}
-         isAddPinMode={isAddPinMode}
-      />
+      <div style={{ height: "65vh", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
+        <MapViewer 
+           imageUrl={plan.imageUrl} 
+           locators={locators} 
+           onAddLocator={isAddPinMode ? handleAddLocatorClick : undefined} 
+           onLocatorClick={handleLocatorClick} 
+           onLocatorDragEnd={handleLocatorDragEnd}
+           isAddPinMode={isAddPinMode}
+           isDragPinMode={isDragPinMode}
+        />
+      </div>
 
       {/* Modal for new Locator */}
       {showLocModal && (
@@ -433,11 +446,15 @@ export default function PlanDetailPage() {
                   {currentAssignments.map(assign => {
                     const vName = availableVigias.find(v => v.id === assign.vigiaId)?.name || "Vigia Removido";
                     const pName = assign.periodName || (assign.period === "morning" ? "Manhã" : assign.period === "afternoon" ? "Tarde" : "Dia Inteiro");
+                    const dateStr = assign.date ? new Date(assign.date).toLocaleDateString("pt-PT") : "";
+                    const timeStr = assign.startTime && assign.endTime ? `${assign.startTime} - ${assign.endTime}` : "";
+                    const detailsStr = [dateStr, timeStr, pName].filter(Boolean).join(" | ");
+
                     return (
                       <div key={assign.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--color-bg)", padding: "0.75rem", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)" }}>
                         <div>
                           <strong>{vName}</strong>
-                          <div style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)" }}>Turno: {pName}</div>
+                          <div style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)" }}>Turno: {detailsStr}</div>
                         </div>
                         <div style={{ display: "flex", gap: "0.5rem" }}>
                           <button 
