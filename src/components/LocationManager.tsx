@@ -5,7 +5,7 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, addDoc, deleteDoc, updateDoc, doc, getDocs } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWorkplace } from "@/contexts/WorkplaceContext";
-import { Map, Plus, Trash2, Clock, X, Save, AlertCircle, Building, MapPin, ChevronLeft, ChevronRight } from "lucide-react";
+import { Map, Plus, Trash2, Clock, X, Save, AlertCircle, Building, MapPin, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 
 export interface AbstractLocation {
   id: string;
@@ -226,13 +226,13 @@ export default function LocationManager() {
                     style={{ 
                       borderBottom: "1px solid var(--color-border)", 
                       background: isEditing ? "rgba(59, 130, 246, 0.05)" : "transparent",
-                      cursor: canEdit ? "pointer" : "default",
+                      cursor: "pointer",
                       transition: "background 0.2s ease",
-                      opacity: canEdit ? 1 : 0.7
+                      opacity: canEdit ? 1 : 0.8
                     }}
-                    onClick={() => { if (canEdit) openEditDrawer(l); }}
-                    onMouseEnter={(e) => { if(!isEditing && canEdit) e.currentTarget.style.background = "var(--color-bg)" }}
-                    onMouseLeave={(e) => { if(!isEditing && canEdit) e.currentTarget.style.background = "transparent" }}
+                    onClick={() => openEditDrawer(l)}
+                    onMouseEnter={(e) => { if(!isEditing) e.currentTarget.style.background = "var(--color-bg)" }}
+                    onMouseLeave={(e) => { if(!isEditing) e.currentTarget.style.background = "transparent" }}
                   >
                     <td style={{ padding: "1rem 1.5rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
                       <MapPin size={16} color={isGlobal ? "var(--color-text-secondary)" : "var(--color-primary)"} />
@@ -253,16 +253,16 @@ export default function LocationManager() {
                       )}
                     </td>
                     <td style={{ padding: "1rem 1.5rem", textAlign: "right" }}>
-                      {canEdit && (
-                        <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
-                          <button 
-                             onClick={(e) => { e.stopPropagation(); openEditDrawer(l); }} 
-                             className="btn btn-secondary" 
-                             style={{ padding: "0.4rem", borderRadius: "var(--radius-full)", background: "transparent", border: "none" }}
-                             title="Editar Horários e Detalhes"
-                          >
-                            <Clock size={16} color="var(--color-text-secondary)" />
-                          </button>
+                      <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+                        <button 
+                           onClick={(e) => { e.stopPropagation(); openEditDrawer(l); }} 
+                           className="btn btn-secondary" 
+                           style={{ padding: "0.4rem", borderRadius: "var(--radius-full)", background: "transparent", border: "none" }}
+                           title={canEdit ? "Editar Horários e Detalhes" : "Ver Horários e Detalhes"}
+                        >
+                          {canEdit ? <Clock size={16} color="var(--color-text-secondary)" /> : <Eye size={16} color="var(--color-text-secondary)" />}
+                        </button>
+                        {canEdit && (
                           <button 
                              onClick={(e) => handleDelete(l.id, e)} 
                              className="btn btn-danger" 
@@ -271,8 +271,8 @@ export default function LocationManager() {
                           >
                             <Trash2 size={16} color="var(--color-danger)" />
                           </button>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -337,7 +337,10 @@ export default function LocationManager() {
         {/* Drawer Content */}
         <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
           
-          {draftLocation && (
+          {draftLocation && (() => {
+            const isReadOnly = draftLocation.workplaceId === "global" && user?.role !== "superadmin";
+
+            return (
             <>
               {isCreating && user?.role === "superadmin" && (
                 <div style={{ background: "rgba(59, 130, 246, 0.05)", padding: "1rem", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)" }}>
@@ -365,7 +368,8 @@ export default function LocationManager() {
                     value={draftLocation.local || ""} 
                     onChange={(e) => handleDraftChange("local", e.target.value)}
                     placeholder="Ex: Entrada Sul"
-                    style={{ padding: "0.6rem" }}
+                    style={{ padding: "0.6rem", opacity: isReadOnly ? 0.7 : 1 }}
+                    disabled={isReadOnly}
                   />
                 </div>
 
@@ -378,7 +382,8 @@ export default function LocationManager() {
                       value={draftLocation.sublocal || ""} 
                       onChange={(e) => handleDraftChange("sublocal", e.target.value)}
                       placeholder="Ex: Porta 3"
-                      style={{ padding: "0.6rem" }}
+                      style={{ padding: "0.6rem", opacity: isReadOnly ? 0.7 : 1 }}
+                      disabled={isReadOnly}
                     />
                   </div>
                   <div>
@@ -389,7 +394,8 @@ export default function LocationManager() {
                       value={draftLocation.subsublocal || ""} 
                       onChange={(e) => handleDraftChange("subsublocal", e.target.value)}
                       placeholder="Ex: Catraca Esquerda"
-                      style={{ padding: "0.6rem" }}
+                      style={{ padding: "0.6rem", opacity: isReadOnly ? 0.7 : 1 }}
+                      disabled={isReadOnly}
                     />
                   </div>
                 </div>
@@ -417,7 +423,8 @@ export default function LocationManager() {
                                       className="input" 
                                       value={draftShifts[date]?.[period]?.start || ""} 
                                       onChange={(e) => handleShiftChange(date, period, "start", e.target.value)}
-                                      style={{ padding: "0.4rem", flex: 1, fontSize: "0.85rem", background: "var(--color-surface)" }}
+                                      style={{ padding: "0.4rem", flex: 1, fontSize: "0.85rem", background: "var(--color-surface)", opacity: isReadOnly ? 0.7 : 1 }}
+                                      disabled={isReadOnly}
                                     />
                                     <span style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem" }}>às</span>
                                     <input 
@@ -425,7 +432,8 @@ export default function LocationManager() {
                                       className="input" 
                                       value={draftShifts[date]?.[period]?.end || ""} 
                                       onChange={(e) => handleShiftChange(date, period, "end", e.target.value)}
-                                      style={{ padding: "0.4rem", flex: 1, fontSize: "0.85rem", background: "var(--color-surface)" }}
+                                      style={{ padding: "0.4rem", flex: 1, fontSize: "0.85rem", background: "var(--color-surface)", opacity: isReadOnly ? 0.7 : 1 }}
+                                      disabled={isReadOnly}
                                     />
                                 </div>
                               </div>
@@ -437,7 +445,7 @@ export default function LocationManager() {
               </div>
 
             </>
-          )}
+          );})()}
 
         </div>
 
@@ -452,16 +460,18 @@ export default function LocationManager() {
           
           <div style={{ display: "flex", gap: "0.75rem", width: "100%" }}>
             <button className="btn btn-secondary" onClick={closeDrawer} style={{ flex: 1, padding: "0.75rem" }}>
-              Cancelar
+              {(draftLocation?.workplaceId === "global" && user?.role !== "superadmin") ? "Fechar" : "Cancelar"}
             </button>
-            <button 
-              className="btn btn-primary" 
-              onClick={saveChanges} 
-              disabled={!hasUnsavedChanges || !draftLocation?.local}
-              style={{ flex: 2, padding: "0.75rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", opacity: (!hasUnsavedChanges || !draftLocation?.local) ? 0.5 : 1 }}
-            >
-              <Save size={18} /> {isCreating ? "Criar Local" : "Gravar Alterações"}
-            </button>
+            {!(draftLocation?.workplaceId === "global" && user?.role !== "superadmin") && (
+              <button 
+                className="btn btn-primary" 
+                onClick={saveChanges} 
+                disabled={!hasUnsavedChanges || !draftLocation?.local}
+                style={{ flex: 2, padding: "0.75rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", opacity: (!hasUnsavedChanges || !draftLocation?.local) ? 0.5 : 1 }}
+              >
+                <Save size={18} /> {isCreating ? "Criar Local" : "Gravar Alterações"}
+              </button>
+            )}
           </div>
         </div>
 
