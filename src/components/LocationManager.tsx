@@ -17,7 +17,6 @@ export interface AbstractLocation {
   customShifts?: any;
 }
 
-const dates = ["10/jul", "11/jul", "12/jul"];
 const periods = ["manha", "tarde"];
 
 export default function LocationManager() {
@@ -73,11 +72,7 @@ export default function LocationManager() {
     setIsGlobalCreate(false);
     
     setDraftLocation({ local: "", sublocal: "", subsublocal: "" });
-    const initial: any = {};
-    for (const d of dates) {
-      initial[d] = { manha: { start: "", end: "" }, tarde: { start: "", end: "" } };
-    }
-    setDraftShifts(initial);
+    setDraftShifts({});
     
     setHasUnsavedChanges(false);
     setIsDrawerOpen(true);
@@ -97,17 +92,44 @@ export default function LocationManager() {
     setDraftLocation({ ...loc });
     
     const initial: any = {};
-    for (const d of dates) {
-      initial[d] = { manha: { start: "", end: "" }, tarde: { start: "", end: "" } };
-      for (const p of periods) {
-        const existing = loc.customShifts?.[d]?.[p] || { start: "", end: "" };
-        initial[d][p] = { ...existing };
+    if (loc.customShifts) {
+      for (const d of Object.keys(loc.customShifts)) {
+        initial[d] = { manha: { start: "", end: "" }, tarde: { start: "", end: "" } };
+        for (const p of periods) {
+          const existing = loc.customShifts[d]?.[p] || { start: "", end: "" };
+          initial[d][p] = { ...existing };
+        }
       }
     }
     setDraftShifts(initial);
     
     setHasUnsavedChanges(false);
     setIsDrawerOpen(true);
+  };
+
+  
+  const handleAddDate = () => {
+    const newDate = prompt("Introduza a data (ex: 2026-08-15 ou 15/ago):");
+    if (!newDate) return;
+    if (draftShifts[newDate]) {
+      alert("Esta data já existe.");
+      return;
+    }
+    setDraftShifts((prev: any) => ({
+      ...prev,
+      [newDate]: { manha: { start: "", end: "" }, tarde: { start: "", end: "" } }
+    }));
+    setHasUnsavedChanges(true);
+  };
+
+  const handleRemoveDate = (dateToRemove: string) => {
+    if (!confirm(`Remover os horários do dia ${dateToRemove}?`)) return;
+    setDraftShifts((prev: any) => {
+      const copy = { ...prev };
+      delete copy[dateToRemove];
+      return copy;
+    });
+    setHasUnsavedChanges(true);
   };
 
   const closeDrawer = () => {
@@ -405,14 +427,28 @@ export default function LocationManager() {
 
               {/* Horários */}
               <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                <h4 style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-text-primary)", textTransform: "uppercase", letterSpacing: "0.05em", opacity: 0.7, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <Clock size={14} /> Horários de Turnos (Opcional)
-                </h4>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <h4 style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-text-primary)", textTransform: "uppercase", letterSpacing: "0.05em", opacity: 0.7, display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <Clock size={14} /> Horários de Turnos (Opcional)
+                  </h4>
+                  {!isReadOnly && (
+                    <button onClick={handleAddDate} className="btn btn-secondary" style={{ padding: "0.4rem 0.75rem", fontSize: "0.75rem", borderRadius: "var(--radius-full)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <Plus size={14} /> Adicionar Dia
+                    </button>
+                  )}
+                </div>
                 
                 <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                  {dates.map(date => (
-                    <div key={date} style={{ background: "var(--color-bg)", padding: "1rem", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)" }}>
-                        <h5 style={{ margin: "0 0 1rem 0", fontSize: "0.85rem", color: "var(--color-primary)" }}>Dia {date}</h5>
+                  {Object.keys(draftShifts).sort().map(date => (
+                    <div key={date} style={{ background: "var(--color-bg)", padding: "1rem", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", position: "relative" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                          <h5 style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-primary)" }}>Dia {date}</h5>
+                          {!isReadOnly && (
+                            <button onClick={() => handleRemoveDate(date)} style={{ background: "transparent", border: "none", color: "var(--color-danger)", cursor: "pointer", padding: "0.2rem", display: "flex" }} title="Remover Dia">
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
                         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                           {periods.map(period => (
                               <div key={period} style={{ display: "flex", alignItems: "center", gap: "1rem" }}>

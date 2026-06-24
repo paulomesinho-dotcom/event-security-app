@@ -121,15 +121,28 @@ function isWithinShiftTime(shift: Shift): { allowed: boolean; reason: string } {
     const shiftDays = shift.days.split(",").map(d => d.trim());
     let dateMatches = false;
     for (const d of shiftDays) {
-      const parts = d.split("/");
-      if (parts.length === 2) {
-        const day = parseInt(parts[0], 10);
-        const monthStr = parts[1].toLowerCase();
-        const month = monthMap[monthStr];
-        
-        if (now.getDate() === day && now.getMonth() === month) {
-          dateMatches = true;
-          break;
+      if (d.includes("-")) {
+        const parts = d.split("-");
+        if (parts.length === 3) {
+           const shiftYear = parseInt(parts[0], 10);
+           const shiftMonth = parseInt(parts[1], 10) - 1;
+           const shiftDay = parseInt(parts[2], 10);
+           if (now.getFullYear() === shiftYear && now.getMonth() === shiftMonth && now.getDate() === shiftDay) {
+             dateMatches = true;
+             break;
+           }
+        }
+      } else {
+        const parts = d.split("/");
+        if (parts.length === 2) {
+          const day = parseInt(parts[0], 10);
+          const monthStr = parts[1].toLowerCase();
+          const month = monthMap[monthStr];
+          
+          if (now.getDate() === day && now.getMonth() === month) {
+            dateMatches = true;
+            break;
+          }
         }
       }
     }
