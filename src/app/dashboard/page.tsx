@@ -46,7 +46,7 @@ function WorkplaceSwitcher() {
         onClick={() => setIsOpen(!isOpen)}
         style={{ 
           display: "flex", alignItems: "center", gap: "0.5rem",
-          padding: "0.5rem 1rem", fontSize: "0.875rem", 
+          padding: "0.5rem 1rem", fontSize: "1rem", 
           background: "var(--color-surface)", color: "var(--color-text-primary)",
           border: "1px solid var(--color-border)", borderRadius: "var(--radius-full)",
           cursor: "pointer", transition: "all 0.2s ease"

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, query, onSnapshot, doc, updateDoc, deleteDoc } from "firebase/firestore";
-import { Plus, Trash2, Edit2, X, Save, AlertCircle, Users, Map as MapIcon, Link as LinkIcon, Menu, Building, Tent, Anchor, Hospital, TreePine, MapPin, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Trash2, Edit2, X, Save, AlertCircle, Users, Map as MapIcon, Link as LinkIcon, Menu, Building, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface Workplace {
   id: string;
@@ -33,16 +33,6 @@ export default function WorkplaceManager() {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 15;
-
-  const getWorkplaceIcon = (name: string) => {
-    const n = name.toLowerCase();
-    if (n.includes("estádio") || n.includes("arena")) return <Building size={16} color="var(--color-primary)" />;
-    if (n.includes("hospital") || n.includes("saúde")) return <Hospital size={16} color="var(--color-danger)" />;
-    if (n.includes("parque") || n.includes("jardim")) return <TreePine size={16} color="var(--color-success)" />;
-    if (n.includes("marina") || n.includes("praia") || n.includes("rio") || n.includes("douro") || n.includes("porto")) return <Anchor size={16} color="#0ea5e9" />;
-    if (n.includes("tenda") || n.includes("concerto") || n.includes("palco")) return <Tent size={16} color="var(--color-primary)" />;
-    return <MapPin size={16} color="var(--color-primary)" />;
-  };
 
   // Edit/Create Workplace State
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -198,8 +188,8 @@ export default function WorkplaceManager() {
                     onMouseLeave={(e) => { if(!isEditing) e.currentTarget.style.background = "transparent" }}
                   >
                     <td style={{ padding: "1rem 1.5rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                      {getWorkplaceIcon(workplace.name)}
-                      <span style={{ fontWeight: 500, color: "var(--color-text-primary)", fontSize: "0.85rem" }}>{workplace.name}</span>
+                      <Building size={16} color="var(--color-primary)" />
+                      <span style={{ fontWeight: 500, color: "var(--color-text-primary)", fontSize: "1rem" }}>{workplace.name}</span>
                     </td>
                     <td style={{ padding: "1rem 1.5rem" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
