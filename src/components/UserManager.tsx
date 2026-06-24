@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, onSnapshot, doc, updateDoc } from "firebase/firestore";
-import { Users, Mail, Edit2, X, Save, AlertCircle, User as UserIcon, ChevronLeft, ChevronRight, Search, Filter } from "lucide-react";
+import { collection, query, onSnapshot, doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { Users, Mail, Edit2, X, Save, AlertCircle, User as UserIcon, ChevronLeft, ChevronRight, Search, Filter, Trash2 } from "lucide-react";
 import { getAuth, sendPasswordResetEmail } from "firebase/auth";
 
 interface User {
@@ -101,6 +101,25 @@ export default function UserManager() {
     } catch (error) {
       console.error("Error updating user", error);
       alert("Erro ao atualizar o utilizador.");
+    }
+  };
+
+  const handleDeleteUser = async (user: User, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (user.role === "superadmin") {
+      alert("Não é possível eliminar um Superadmin.");
+      return;
+    }
+    if (confirm(`Tem a certeza que pretende eliminar permanentemente o utilizador ${user.name}? Esta ação não pode ser desfeita e irá remover os dados e histórico de ${user.email || user.name}.`)) {
+      try {
+        await deleteDoc(doc(db, "users", user.id));
+        if (editingUserId === user.id) {
+          closeDrawer();
+        }
+      } catch (error) {
+        console.error("Error deleting user", error);
+        alert("Ocorreu um erro ao tentar eliminar o utilizador.");
+      }
     }
   };
 
@@ -222,6 +241,16 @@ export default function UserManager() {
                         >
                           <Edit2 size={16} color="var(--color-text-secondary)" />
                         </button>
+                        {!isSuperadmin && (
+                          <button 
+                             onClick={(e) => handleDeleteUser(u, e)} 
+                             className="btn btn-danger" 
+                             style={{ padding: "0.4rem", borderRadius: "var(--radius-full)", background: "transparent", border: "none" }}
+                             title="Eliminar Utilizador"
+                          >
+                            <Trash2 size={16} color="var(--color-danger)" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
