@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, onSnapshot, doc, updateDoc } from "firebase/firestore";
-import { Users, Mail, Edit2, X, Save, AlertCircle, User as UserIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { Users, Mail, Edit2, X, Save, AlertCircle, User as UserIcon, ChevronLeft, ChevronRight, Search, Filter } from "lucide-react";
 import { getAuth, sendPasswordResetEmail } from "firebase/auth";
 
 interface User {
@@ -21,6 +21,13 @@ export default function UserManager() {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 15;
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCongregation, setSelectedCongregation] = useState("");
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedCongregation]);
 
   // Drawer State
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -99,11 +106,48 @@ export default function UserManager() {
 
   if (loading) return <div style={{ padding: "2rem", color: "var(--color-text-secondary)" }}>A carregar utilizadores...</div>;
 
+  const allCongregations = Array.from(new Set(users.map(u => u.congregation).filter(Boolean))).sort();
+
+  const filteredUsers = users.filter(u => {
+    const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCongregation = selectedCongregation ? u.congregation === selectedCongregation : true;
+    return matchesSearch && matchesCongregation;
+  });
+
   return (
     <div style={{ position: "relative", minHeight: "calc(100vh - 100px)" }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
         <h3 style={{ margin: 0, fontWeight: 500, color: "var(--color-text-primary)", fontSize: "1.25rem", display: "none" }}>Gestão de Utilizadores</h3>
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", background: "var(--color-surface)", padding: "1rem", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)", marginBottom: "1.5rem" }}>
+        <div style={{ flex: "1 1 250px", position: "relative" }}>
+          <Search size={18} style={{ position: "absolute", left: "1rem", top: "50%", transform: "translateY(-50%)", color: "var(--color-text-secondary)" }} />
+          <input 
+            type="text" 
+            placeholder="Pesquisar por nome..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="input"
+            style={{ paddingLeft: "2.75rem", width: "100%" }}
+          />
+        </div>
+        <div style={{ flex: "1 1 200px", position: "relative" }}>
+          <Filter size={18} style={{ position: "absolute", left: "1rem", top: "50%", transform: "translateY(-50%)", color: "var(--color-text-secondary)" }} />
+          <select 
+            className="input" 
+            value={selectedCongregation} 
+            onChange={(e) => setSelectedCongregation(e.target.value)}
+            style={{ paddingLeft: "2.75rem", width: "100%", cursor: "pointer" }}
+          >
+            <option value="">Todas as Congregações</option>
+            {allCongregations.map((c, i) => (
+              <option key={i} value={c as string}>{c as string}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Google Drive Style Table */}
@@ -119,7 +163,7 @@ export default function UserManager() {
               </tr>
             </thead>
             <tbody>
-              {users.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map(u => {
+              {filteredUsers.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map(u => {
                 const isEditing = editingUserId === u.id;
                 const isSuperadmin = u.role === 'superadmin';
 
@@ -193,10 +237,10 @@ export default function UserManager() {
       </div>
 
       {/* Pagination Controls */}
-      {users.length > ITEMS_PER_PAGE && (
+      {filteredUsers.length > ITEMS_PER_PAGE && (
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1rem", padding: "0 0.5rem" }}>
           <span style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)" }}>
-            A mostrar {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, users.length)} de {users.length}
+            A mostrar {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredUsers.length)} de {filteredUsers.length}
           </span>
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <button 
@@ -207,9 +251,9 @@ export default function UserManager() {
               <ChevronLeft size={16} color="var(--color-text-primary)" />
             </button>
             <button 
-              onClick={() => setCurrentPage(p => Math.min(Math.ceil(users.length / ITEMS_PER_PAGE), p + 1))}
-              disabled={currentPage === Math.ceil(users.length / ITEMS_PER_PAGE)}
-              style={{ padding: "0.4rem", borderRadius: "var(--radius-md)", background: "var(--color-surface)", border: "1px solid var(--color-border)", cursor: currentPage === Math.ceil(users.length / ITEMS_PER_PAGE) ? "not-allowed" : "pointer", opacity: currentPage === Math.ceil(users.length / ITEMS_PER_PAGE) ? 0.5 : 1 }}
+              onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredUsers.length / ITEMS_PER_PAGE), p + 1))}
+              disabled={currentPage === Math.ceil(filteredUsers.length / ITEMS_PER_PAGE)}
+              style={{ padding: "0.4rem", borderRadius: "var(--radius-md)", background: "var(--color-surface)", border: "1px solid var(--color-border)", cursor: currentPage === Math.ceil(filteredUsers.length / ITEMS_PER_PAGE) ? "not-allowed" : "pointer", opacity: currentPage === Math.ceil(filteredUsers.length / ITEMS_PER_PAGE) ? 0.5 : 1 }}
             >
               <ChevronRight size={16} color="var(--color-text-primary)" />
             </button>
