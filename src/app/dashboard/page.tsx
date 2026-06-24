@@ -16,7 +16,7 @@ import WorkplaceManager from "@/components/WorkplaceManager";
 import UserManager from "@/components/UserManager";
 import TeamManager from "@/components/TeamManager";
 import VigiaDashboard from "@/components/VigiaDashboard";
-import ShiftModelManager from "@/components/ShiftModelManager";
+import ShiftsPage from "@/components/ShiftsPage";
 import LocationManager from "@/components/LocationManager";
 import SettingsModal from "@/components/SettingsModal";
 import EmergencyBanner from "@/components/EmergencyBanner";
@@ -266,7 +266,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <button onClick={() => setIsPatrolMode(false)} className="btn btn-secondary" style={{ padding: "0.4rem 0.65rem", fontSize: "0.75rem" }}>Gestão (PC)</button>
+            <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--color-text-secondary)", marginRight: "0.5rem" }}>{user?.name || user?.email?.split('@')[0]}</span>
             <button onClick={handleLogout} className="btn" style={{ padding: "0.4rem", fontSize: "0.75rem", background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: "var(--radius-md)" }} title="Terminar Sessão"><LogOut size={16} /></button>
           </div>
         </nav>
@@ -313,7 +313,7 @@ export default function DashboardPage() {
           {(user.role === "captain" || user.role === "superadmin") && (
             <>
               <NavItem id="team" icon={Users} label="Equipa do Local" />
-              <NavItem id="models" icon={Clock} label="Modelos de Turno" />
+              <NavItem id="shifts" icon={Clock} label="Página de Turnos" />
               <NavItem id="locations" icon={MapPin} label="Estrutura de Locais" />
               <NavItem id="plans" icon={Map} label="Plantas & Escalas" />
               <NavItem id="incidents" icon={FileWarning} label="Ocorrências" />
@@ -403,7 +403,7 @@ export default function DashboardPage() {
               {activeTab === 'global_plans' && "Biblioteca Global de Plantas"}
               {activeTab === 'plans' && "Plantas & Escalas do Workplace"}
               {activeTab === 'team' && "Equipa do Local"}
-              {activeTab === 'models' && "Modelos de Turno"}
+              {activeTab === 'shifts' && "Página de Turnos"}
               {activeTab === 'locations' && "Estrutura de Locais"}
               {activeTab === 'incidents' && "Gestão de Ocorrências"}
               {activeTab === 'suspects' && "Gestão de Suspeitos"}
@@ -424,7 +424,7 @@ export default function DashboardPage() {
             {(user.role === "captain" || user.role === "superadmin") && (
               <div className="animate-fade-in">
                 {activeTab === "team" && <TeamManager />}
-                {activeTab === "models" && <ShiftModelManager />}
+                {activeTab === "shifts" && <ShiftsPage />}
                 {activeTab === "locations" && <LocationManager />}
                 {activeTab === "incidents" && <IncidentManager />}
                 {activeTab === "suspects" && <SuspectManager />}

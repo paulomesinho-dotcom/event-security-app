@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import { initAudio, playAlertBeeps, stopAlertBeeps } from "@/lib/audioAlert";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, updateDoc, getDoc, addDoc, orderBy, limit } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, updateDoc, getDoc, addDoc, orderBy, limit, arrayUnion } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useAuth } from "@/contexts/AuthContext";
-import { MapPin, Play, Square, Clock, Calendar, CheckCircle2, AlertTriangle, X, Bell, FileWarning, MessageCircle, Camera, Image as ImageIcon, Search, Crosshair, UserX, Info, ChevronUp, ChevronDown } from "lucide-react";
+import { MapPin, Play, Square, Clock, Calendar, CheckCircle2, AlertTriangle, X, Bell, FileWarning, MessageCircle, Camera, Image as ImageIcon, Search, Crosshair, UserX, Info, ChevronUp, ChevronDown, Radio, CheckCheck, Check } from "lucide-react";
 import { requestNotificationPermission, onForegroundMessage } from "@/lib/firebase-messaging";
 
 import dynamic from "next/dynamic";
@@ -238,7 +238,12 @@ export default function CaptainPatrolDashboard({ onOpenMap, isSidebarOpen }: { o
   const [incidentText, setIncidentText] = useState("");
   const [incidentPhoto, setIncidentPhoto] = useState<File | null>(null);
   const [incidentUploading, setIncidentUploading] = useState(false);
-  const [myIncidents, setMyIncidents] = useState<any[]>([]);
+  const [allIncidents, setAllIncidents] = useState<any[]>([]);
+  const [expandedIncidentId, setExpandedIncidentId] = useState<string | null>(null);
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [incidentTab, setIncidentTab] = useState<"ativas" | "arquivadas">("ativas");
+  const activeIncidents = allIncidents.filter(i => i.status === "open");
+  const archivedIncidents = allIncidents.filter(i => i.status !== "open");
 
   // Suspicious Persons
   
@@ -257,7 +262,11 @@ export default function CaptainPatrolDashboard({ onOpenMap, isSidebarOpen }: { o
     };
   }, []);
 
-  const [activePanel, setActivePanel] = useState<'suspects'|'incidents'|'info'|null>(null);
+  const [globalNotifications, setGlobalNotifications] = useState<any[]>([]);
+  const [activePanel, setActivePanel] = useState<'zello'|'suspects'|'incidents'|'info'|null>(null);
+  const [showGlobalAlertModal, setShowGlobalAlertModal] = useState(false);
+  const [globalAlertText, setGlobalAlertText] = useState("");
+  const [sendingGlobalAlert, setSendingGlobalAlert] = useState(false);
   
   // Info Data
   const [infoItems, setInfoItems] = useState<any[]>([]);
@@ -286,7 +295,10 @@ export default function CaptainPatrolDashboard({ onOpenMap, isSidebarOpen }: { o
   }, {} as Record<string, any[]>);
 
   // Instead of showSuspectsList, showIncidentsList, we will replace them where used.
-const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
+const [allSuspects, setAllSuspects] = useState<any[]>([]);
+  const [suspectTab, setSuspectTab] = useState<"ativos" | "arquivados">("ativos");
+  const activeSuspects = allSuspects.filter(s => s.status === "active");
+  const archivedSuspects = allSuspects.filter(s => s.status !== "active");
     const [showNewSuspectModal, setShowNewSuspectModal] = useState(false);
   const [selectedSuspect, setSelectedSuspect] = useState<any>(null);
   const [mapModalData, setMapModalData] = useState<any>(null);
@@ -307,7 +319,12 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
 
   useEffect(() => {
     if (!user) return;
-    const qShifts = query(collection(db, "shifts"), where("personId", "==", user.uid));
+    const qShifts = query(collection(db, "shifts"), where("personId", "==", user?.uid || "unknown"));
+    
+    const unsubGlobalNotifs = onSnapshot(query(collection(db, "global_notifications"), orderBy("timestamp", "desc")), (snap) => {
+      const notifs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setGlobalNotifications(notifs);
+    });
     const unsubShifts = onSnapshot(qShifts, (snapshot) => {
       const data: Shift[] = [];
       snapshot.forEach(d => data.push({ id: d.id, ...d.data() } as Shift));
@@ -315,7 +332,7 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
       setShifts(data);
       setLoading(false);
     });
-    const qNotifs = query(collection(db, "notifications"), where("vigiaId", "==", user.uid));
+    const qNotifs = query(collection(db, "notifications"), where("vigiaId", "==", user?.uid || "unknown"));
     const unsubNotifs = onSnapshot(qNotifs, (snapshot) => {
       const notifs: Notification[] = [];
       snapshot.forEach(d => {
@@ -352,20 +369,20 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
       setWorkplaces(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
-    const qIncidents = query(collection(db, "incidents"), where("vigiaId", "==", user.uid));
+    const qIncidents = query(collection(db, "incidents"));
     const unsubIncidents = onSnapshot(qIncidents, (snap) => {
       const inc: any[] = [];
       snap.forEach(d => inc.push({ id: d.id, ...d.data() }));
       inc.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      setMyIncidents(inc);
+      setAllIncidents(inc);
     });
 
-    const qSuspects = query(collection(db, "suspicious_persons"), where("status", "==", "active"));
+    const qSuspects = query(collection(db, "suspicious_persons"));
     const unsubSuspects = onSnapshot(qSuspects, (snap) => {
       const s: any[] = [];
       snap.forEach(d => s.push({ id: d.id, ...d.data() }));
       s.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      setActiveSuspects(s);
+      setAllSuspects(s);
       setSelectedSuspect((prev: any) => {
         if (!prev) return null;
         const updated = s.find(sus => sus.id === prev.id);
@@ -374,7 +391,9 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
       });
     });
 
-    return () => { unsubShifts(); unsubNotifs(); unsubFcm(); unsubWorkplaces(); unsubIncidents(); unsubSuspects(); };
+    return () => { unsubGlobalNotifs();
+        unsubShifts();
+        unsubNotifs(); unsubFcm(); unsubWorkplaces(); unsubIncidents(); unsubSuspects(); };
   }, [user]);
 
   useEffect(() => {
@@ -427,7 +446,10 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
   if (!activeWorkplace && pendingShift) {
     activeWorkplace = workplaces.find(w => w.planIds?.includes(pendingShift.planId)) || null;
   }
-  if (!activeWorkplace && user?.workplaceId) {
+  if (!activeWorkplace && user?.uid) {
+      activeWorkplace = workplaces.find(w => w.captainId === user.uid) || null;
+    }
+    if (!activeWorkplace && user?.workplaceId) {
     activeWorkplace = workplaces.find(w => w.id === user.workplaceId) || null;
   }
 
@@ -468,7 +490,7 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
 
   const submitIncident = async () => {
     const currentShift = activeShift || shifts.find(s => s.status === "pending");
-    if (!currentShift) return alert("Precisa de ter um turno atribuído para reportar ocorrências.");
+    // if (!currentShift) return alert("Precisa de ter um turno atribuído para reportar ocorrências.");
     if (!incidentText) return alert("Descreva a ocorrência.");
     setIncidentUploading(true);
     try {
@@ -650,6 +672,46 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
     }
   };
 
+  
+  
+  const markGlobalNotificationAsRead = async (notif: any) => {
+    if (!user?.uid || notif.readBy?.includes(user.uid)) return;
+    try {
+      await updateDoc(doc(db, "global_notifications", notif.id), {
+        readBy: arrayUnion(user.uid)
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const sendGlobalAlert = async () => {
+    if (!globalAlertText) return;
+    setSendingGlobalAlert(true);
+    try {
+      await fetch("/api/send-notification-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: globalAlertText,
+          senderName: user?.name || user?.email,
+          senderId: user?.uid,
+          title: "NOTIFICAÇÃO GLOBAL",
+          target: "all"
+        })
+      });
+      alert("Notificação enviada para todos!");
+      setGlobalAlertText("");
+      setShowGlobalAlertModal(false);
+      setActivePanel(null);
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao enviar notificação.");
+    } finally {
+      setSendingGlobalAlert(false);
+    }
+  };
+
   if (loading) return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "4rem", color: "var(--color-text-secondary)" }}>
       <Clock size={32} style={{ marginBottom: "1rem", opacity: 0.4 }} />
@@ -748,6 +810,29 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
+
+      {activeWorkplace?.plans && activeWorkplace.plans.length > 0 && (
+        <div style={{ marginBottom: "1.5rem" }}>
+          <span style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "var(--color-text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "0.75rem" }}>O Seu Local</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            {activeWorkplace.plans.map((p: any) => (
+              <button 
+                key={p.id}
+                onClick={() => setMapModalData({ title: p.name, planImageUrl: p.imageUrl })}
+                style={{ width: "100%", padding: "1rem", background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", color: "var(--color-text-primary)", fontWeight: 600, fontSize: "0.95rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                  <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "rgba(56,189,248,0.1)", display: "flex", alignItems: "center", justifyContent: "center", color: "#38bdf8" }}>
+                    <MapPin size={16} />
+                  </div>
+                  {p.name}
+                </div>
+                <span style={{ fontSize: "1.2rem", color: "var(--color-text-tertiary)" }}>›</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
           {/* Secção Principal: Estado da Equipa */}
           <div style={{ marginTop: "1rem" }}>
             <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--color-text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Equipa em Patrulha (Ativos)</span>
@@ -825,7 +910,8 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
                        }
                    }
 
-                   return (
+                   
+  return (
                      <div key={shift.id} onClick={() => {
                         const plan = activeWorkplace?.plans?.find((p: any) => p.id === locator?.planId);
                         if (plan && locator) {
@@ -859,50 +945,97 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: "calc(76px + env(safe-area-inset-bottom))", background: "var(--color-bg)", zIndex: 9000, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={{ background: "linear-gradient(135deg, #1e0a3c, #5b1030)", padding: "1.25rem 1.5rem", borderBottom: "1px solid rgba(239,68,68,0.3)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-              <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "rgba(239,68,68,0.25)", border: "1.5px solid rgba(239,68,68,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <FileWarning size={18} color="#fca5a5" />
+              <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "rgba(239,68,68,0.25)", border: "1px solid rgba(255,255,255,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <FileWarning size={18} color="#ffffff" />
               </div>
               <div>
-                <h3 style={{ margin: 0, color: "#fee2e2", fontSize: "1rem", fontWeight: 700 }}>Ocorrências</h3>
-                {myIncidents.length > 0 && <p style={{ margin: 0, fontSize: "0.75rem", color: "#fca5a5" }}>{myIncidents.length} registadas</p>}
+                <h3 style={{ margin: 0, color: "#ffffff", fontSize: "1rem", fontWeight: 700 }}>Ocorrências</h3>
+                {activeIncidents.length > 0 && <p style={{ margin: 0, fontSize: "0.75rem", color: "#fca5a5" }}>{activeIncidents.length} ativas</p>}
               </div>
             </div>
             <button onClick={() => setActivePanel(null)} style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "white", cursor: "pointer", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={18}/></button>
           </div>
           <div style={{ padding: "1rem", flex: 1, minWidth: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.75rem", paddingBottom: "3rem" }}>
-            <button 
-              onClick={() => setShowIncidentModal(true)}
-              style={{ padding: "1rem 1.25rem", background: "linear-gradient(135deg, #dc2626, #ef4444)", color: "white", border: "none", borderRadius: "var(--radius-md)", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", fontSize: "0.95rem", boxShadow: "0 4px 16px rgba(239,68,68,0.4)" }}>
-              <AlertTriangle size={20} /> NOVA OCORRÊNCIA
-            </button>
-            
-            {myIncidents.length === 0 ? (
+                          <div style={{ display: "flex", background: "var(--color-surface)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: "var(--radius-lg)", padding: "0.25rem", marginBottom: "1rem" }}>
+                <button 
+                  onClick={() => setIncidentTab("ativas")}
+                  style={{ flex: 1, padding: "0.6rem", background: incidentTab === "ativas" ? "rgba(239,68,68,0.15)" : "transparent", color: incidentTab === "ativas" ? "#ef4444" : "var(--color-text-secondary)", border: "none", borderRadius: "var(--radius-md)", fontWeight: incidentTab === "ativas" ? 600 : 500, fontSize: "0.85rem", cursor: "pointer", transition: "all 0.2s" }}
+                >
+                  Ativas ({activeIncidents.length})
+                </button>
+                <button 
+                  onClick={() => setIncidentTab("arquivadas")}
+                  style={{ flex: 1, padding: "0.6rem", background: incidentTab === "arquivadas" ? "rgba(239,68,68,0.15)" : "transparent", color: incidentTab === "arquivadas" ? "#ef4444" : "var(--color-text-secondary)", border: "none", borderRadius: "var(--radius-md)", fontWeight: incidentTab === "arquivadas" ? 600 : 500, fontSize: "0.85rem", cursor: "pointer", transition: "all 0.2s" }}
+                >
+                  Histórico ({archivedIncidents.length})
+                </button>
+              </div>
+
+              {incidentTab === "ativas" && (
+                <button 
+                  onClick={() => setShowIncidentModal(true)}
+                  style={{ padding: "1rem 1.25rem", background: "linear-gradient(135deg, #dc2626, #ef4444)", color: "white", border: "none", borderRadius: "var(--radius-md)", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", fontSize: "0.95rem", boxShadow: "0 4px 16px rgba(239,68,68,0.4)" }}>
+                  <AlertTriangle size={20} /> NOVA OCORRÊNCIA
+                </button>
+              )}
+              {(incidentTab === "ativas" ? activeIncidents : archivedIncidents).length === 0 ? (
                <div style={{ textAlign: "center", padding: "3rem 2rem", color: "var(--color-text-secondary)" }}>
                  <FileWarning size={40} style={{ opacity: 0.3, margin: "0 auto 1rem", display: "block" }} />
                  <p style={{ margin: 0 }}>Nenhuma ocorrência registada.</p>
                </div>
             ) : (
-               myIncidents.map((inc, idx) => (
-                 <div key={idx} style={{ background: "var(--color-surface)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", padding: "1rem" }}>
-                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
-                     <span style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)", fontWeight: 600 }}>
-                       {new Date(inc.createdAt).toLocaleString("pt-PT")}
-                     </span>
-                     <span style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444", padding: "0.15rem 0.5rem", borderRadius: "var(--radius-full)", fontSize: "0.7rem", fontWeight: 700 }}>
-                       REGISTADA
-                     </span>
-                   </div>
-                   <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", color: "var(--color-text-primary)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                     {inc.description}
-                   </p>
-                   {inc.photoUrl && (
-                     <div style={{ marginTop: "0.5rem" }}>
-                       <img src={inc.photoUrl} alt="Anexo" style={{ width: "100%", maxHeight: "150px", objectFit: "cover", borderRadius: "var(--radius-sm)" }} />
+               (incidentTab === "ativas" ? activeIncidents : archivedIncidents).map((inc, idx) => (
+                 <div key={inc.id || idx} style={{ flexShrink: 0, background: "var(--color-surface)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", overflow: "hidden", position: "relative" }}>
+                     <div 
+                       onClick={() => setExpandedIncidentId(expandedIncidentId === inc.id ? null : inc.id)} 
+                       style={{ padding: "1rem", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                     >
+                       <div>
+                         <span style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)", fontWeight: 600, display: "block", marginBottom: "0.2rem" }}>
+                           {new Date(inc.createdAt).toLocaleString("pt-PT")}
+                         </span>
+                         <span style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--color-text-primary)" }}>
+                           {inc.vigiaName || "Equipa de Segurança"}
+                         </span>
+                       </div>
+                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                         <span style={{ background: incidentTab === "ativas" ? "rgba(239,68,68,0.1)" : "rgba(16,185,129,0.1)", color: incidentTab === "ativas" ? "#ef4444" : "#10b981", padding: "0.15rem 0.5rem", borderRadius: "var(--radius-full)", fontSize: "0.7rem", fontWeight: 700 }}>
+                           {incidentTab === "ativas" ? "ATIVA" : "RESOLVIDA"}
+                         </span>
+                         <span style={{ color: "var(--color-text-tertiary)", fontSize: "1.2rem", transform: expandedIncidentId === inc.id ? "rotate(-90deg)" : "rotate(90deg)", transition: "transform 0.2s" }}>›</span>
+                       </div>
                      </div>
-                   )}
-                 </div>
-               ))
-            )}
+                     
+                     {expandedIncidentId === inc.id && (
+                       <div style={{ padding: "0 1rem 1rem 1rem", borderTop: "1px solid var(--color-border)", paddingTop: "1rem" }}>
+                         <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", color: "var(--color-text-primary)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                           {inc.message}
+                         </p>
+                         {inc.photoUrl && (
+                           <div style={{ marginTop: "0.5rem" }}>
+                             <img onClick={(e) => { e.stopPropagation(); setSelectedPhoto(inc.photoUrl); }} src={inc.photoUrl} alt="Anexo" style={{ width: "100%", maxHeight: "150px", objectFit: "cover", borderRadius: "var(--radius-sm)", cursor: "zoom-in" }} />
+                           </div>
+                         )}
+                         {incidentTab === "ativas" && (
+                           <button
+                             onClick={async (e) => {
+                               e.stopPropagation();
+                               if(confirm("Tem a certeza que deseja fechar esta ocorrência?")) {
+                                 try {
+                                   await updateDoc(doc(db, "incidents", inc.id), { status: "resolved", resolvedAt: new Date().toISOString(), resolvedBy: user?.name || user?.email || "Capitão" });
+                                 } catch(err) { alert("Erro ao fechar"); }
+                               }
+                             }}
+                             style={{ marginTop: "1rem", width: "100%", background: "rgba(16, 185, 129, 0.1)", color: "#10b981", border: "1px solid rgba(16, 185, 129, 0.3)", padding: "0.75rem", borderRadius: "var(--radius-md)", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer" }}
+                           >
+                             FECHAR OCORRÊNCIA
+                           </button>
+                         )}
+                       </div>
+                     )}
+                   </div>
+                 ))
+              )}
           </div>
         </div>
       )}
@@ -912,11 +1045,11 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
           <div style={{ background: "var(--color-surface)", width: "100%", display: "flex", flexDirection: "column", flex: 1, minWidth: 0, overflow: "hidden" }}>
             <div style={{ background: "linear-gradient(135deg, #1e0a3c, #5b1030)", padding: "1.25rem 1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "rgba(239,68,68,0.3)", border: "1.5px solid rgba(239,68,68,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <AlertTriangle size={18} color="#fca5a5" />
+                <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "rgba(255,255,255,0.2)", border: "1px solid rgba(255,255,255,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <AlertTriangle size={18} color="#ffffff" />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, color: "#fee2e2", fontSize: "1rem", fontWeight: 700 }}>Reportar Ocorrência</h3>
+                  <h3 style={{ margin: 0, color: "#ffffff", fontSize: "1rem", fontWeight: 700 }}>Reportar Ocorrência</h3>
                   <p style={{ margin: 0, fontSize: "0.75rem", color: "#fca5a5" }}>Alerta imediato para o Capitão</p>
                 </div>
               </div>
@@ -1013,10 +1146,10 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
             <button onClick={() => setShowHistoryModal(false)} style={{ background: "none", border: "none", color: "var(--color-text-primary)", cursor: "pointer" }}><X size={20}/></button>
           </div>
           <div style={{ padding: "1rem", flex: 1, minWidth: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "1rem", paddingBottom: "3rem" }}>
-            {myIncidents.length === 0 ? (
+            {allIncidents.length === 0 ? (
                <div style={{ textAlign: "center", padding: "2rem", color: "var(--color-text-secondary)" }}>Ainda não reportou nenhuma ocorrência.</div>
             ) : (
-               myIncidents.map(inc => (
+               allIncidents.map(inc => (
                  <div key={inc.id} style={{ background: "var(--color-surface)", borderRadius: "var(--radius-md)", padding: "1rem", border: "1px solid var(--color-border)" }}>
                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: inc.status === "open" ? "#ef4444" : "#10b981", background: inc.status === "open" ? "rgba(239,68,68,0.1)" : "rgba(16,185,129,0.1)", padding: "0.15rem 0.5rem", borderRadius: "999px" }}>
@@ -1056,6 +1189,23 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
             <button onClick={() => setActivePanel(null)} style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "white", cursor: "pointer", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={18}/></button>
           </div>
           <div style={{ padding: "1rem", flex: 1, minWidth: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.75rem", paddingBottom: "3rem" }}>
+            
+              <div style={{ display: "flex", background: "var(--color-surface)", border: "1px solid rgba(168,85,247,0.15)", borderRadius: "var(--radius-lg)", padding: "0.25rem", marginBottom: "1rem" }}>
+                <button 
+                  onClick={() => setSuspectTab("ativos")}
+                  style={{ flex: 1, padding: "0.6rem", background: suspectTab === "ativos" ? "rgba(168,85,247,0.15)" : "transparent", color: suspectTab === "ativos" ? "#a855f7" : "var(--color-text-secondary)", border: "none", borderRadius: "var(--radius-md)", fontWeight: suspectTab === "ativos" ? 600 : 500, fontSize: "0.85rem", cursor: "pointer", transition: "all 0.2s" }}
+                >
+                  Ativos ({activeSuspects.length})
+                </button>
+                <button 
+                  onClick={() => setSuspectTab("arquivados")}
+                  style={{ flex: 1, padding: "0.6rem", background: suspectTab === "arquivados" ? "rgba(168,85,247,0.15)" : "transparent", color: suspectTab === "arquivados" ? "#a855f7" : "var(--color-text-secondary)", border: "none", borderRadius: "var(--radius-md)", fontWeight: suspectTab === "arquivados" ? 600 : 500, fontSize: "0.85rem", cursor: "pointer", transition: "all 0.2s" }}
+                >
+                  Histórico ({archivedSuspects.length})
+                </button>
+              </div>
+
+              {suspectTab === "ativos" && (
             <button 
               onClick={() => {
                 setSuspectLocal(activeShiftLocation?.local || activeWorkplace?.name || activeShift?.locatorName || (pendingShifts[0]?.locatorName) || "");
@@ -1066,15 +1216,15 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
               style={{ padding: "1rem 1.25rem", background: "linear-gradient(135deg, #7c3aed, #a855f7)", color: "white", border: "none", borderRadius: "var(--radius-md)", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", fontSize: "0.95rem", boxShadow: "0 4px 16px rgba(168,85,247,0.4)" }}>
               <Crosshair size={20} /> DETETADO SUSPEITO
             </button>
-            
-            {activeSuspects.length === 0 ? (
+              )}
+              {(suspectTab === "ativos" ? activeSuspects : archivedSuspects).length === 0 ? (
                <div style={{ textAlign: "center", padding: "3rem 2rem", color: "var(--color-text-secondary)" }}>
                  <UserX size={40} style={{ opacity: 0.3, margin: "0 auto 1rem", display: "block" }} />
                  <p style={{ margin: 0 }}>Nenhum suspeito ativo no momento.</p>
                </div>
             ) : (
-               activeSuspects.map(sus => (
-                 <div key={sus.id} onClick={() => setSelectedSuspect(sus)} style={{ background: "var(--color-surface)", borderRadius: "var(--radius-md)", border: "1px solid rgba(168,85,247,0.2)", cursor: "pointer", overflow: "hidden" }}>
+               (suspectTab === "ativos" ? activeSuspects : archivedSuspects).map(sus => (
+                 <div key={sus.id} onClick={() => setSelectedSuspect(sus)} style={{ flexShrink: 0, background: "var(--color-surface)", borderRadius: "var(--radius-md)", border: "1px solid rgba(168,85,247,0.2)", cursor: "pointer", overflow: "hidden" }}>
                    <div style={{ display: "flex", gap: "0.75rem", padding: "0.9rem 1rem", alignItems: "flex-start" }}>
                      {sus.photoUrl ? (
                        <img src={sus.photoUrl} alt="Suspeito" style={{ width: "56px", height: "56px", objectFit: "cover", borderRadius: "var(--radius-sm)", flexShrink: 0 }} />
@@ -1242,7 +1392,10 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
                 </div>
               )}
 
+            
+            {selectedSuspect.status === "active" && (
             <form onSubmit={handleAddSuspectUpdate} style={{ background: "var(--color-surface)", padding: "1rem", borderRadius: "var(--radius-lg)", border: "1px solid rgba(168,85,247,0.2)", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+
               <h4 style={{ margin: 0, fontSize: "0.85rem", fontWeight: 700, color: "#a855f7", textTransform: "uppercase", letterSpacing: "0.04em" }}>Adicionar Atualização</h4>
               <select value={updateType} onChange={(e) => setUpdateType(e.target.value)} className="input">
                 <option value="avistamento">Visto a passar / Novo Local</option>
@@ -1258,10 +1411,13 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
                 {updatePhoto ? "✓ Foto Pronta" : "Tirar Foto (Opcional)"}
               </label>
 
+              
               <button type="submit" disabled={updateUploading || (!updateMessage && (updateType === 'resolvido' || updateType === 'falso_alarme'))} style={{ background: updateUploading ? "rgba(168,85,247,0.3)" : "linear-gradient(135deg, #7c3aed, #a855f7)", color: "white", padding: "0.75rem", border: "none", borderRadius: "var(--radius-md)", fontWeight: 700, cursor: updateUploading ? "not-allowed" : "pointer", boxShadow: updateUploading ? "none" : "0 4px 12px rgba(168,85,247,0.35)" }}>
-                {updateUploading ? "A enviar..." : "ENVIAR ATUALIZAÇíO"}
+                {updateUploading ? "A enviar..." : "ENVIAR ATUALIZAÇÃO"}
               </button>
             </form>
+            )}
+
           </div>
         </div>
       )}
@@ -1386,39 +1542,196 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
       `}</style>
 
     {/* BOTTOM NAVIGATION BAR — flex sibling of scrollable content */}
-    <div className="vigia-app-bottom-bar" style={{ zIndex: 20000 }}>
-
-          {zelloLink && (
-            <a href={zelloLink} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.3rem", textDecoration: "none", flex: "1 0 auto" }}>
-              <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: "rgba(249, 115, 22, 0.15)", border: "1.5px solid rgba(249,115,22,0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "#f97316" }}>
-                <Play size={20} fill="currentColor" />
+    
+        {activePanel === 'zello' && !showGlobalAlertModal && (
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: "calc(76px + env(safe-area-inset-bottom))", background: "var(--color-bg)", zIndex: 9000, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div style={{ background: "linear-gradient(135deg, #3b0764, #c2410c)", padding: "1.25rem 1.5rem", borderBottom: "1px solid rgba(249,115,22,0.3)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "rgba(249,115,22,0.25)", border: "1.5px solid rgba(249,115,22,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Radio size={18} color="#fdba74" />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, color: "#ffedd5", fontSize: "1rem", fontWeight: 700 }}>Comunicações</h3>
+                  </div>
               </div>
-              <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "#f97316" }}>Rádio</span>
-            </a>
-          )}
-          <button onClick={() => { stopAlertBeeps(); setActivePanel("suspects"); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.3rem", background: "none", border: "none", cursor: "pointer", flex: "1 0 auto" }}>
-            <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: activeSuspects.length > 0 ? "rgba(168,85,247,0.2)" : "rgba(168,85,247,0.08)", border: activeSuspects.length > 0 ? "1.5px solid rgba(168,85,247,0.7)" : "1.5px solid rgba(168,85,247,0.3)", display: "flex", alignItems: "center", justifyContent: "center", color: "#a855f7", position: "relative", animation: activeSuspects.length > 0 ? "suspectPulse 3s ease-in-out infinite" : "none" }}>
-              <UserX size={20} />
-              {activeSuspects.length > 0 && (
-                <span style={{ position: "absolute", top: "-3px", right: "-3px", background: "#a855f7", color: "white", borderRadius: "50%", width: "18px", height: "18px", fontSize: "0.6rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{activeSuspects.length}</span>
+              <button onClick={() => setActivePanel(null)} style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "white", cursor: "pointer", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={18}/></button>
+            </div>
+            
+            <div style={{ padding: "1.25rem", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1rem", flex: 1 }}>
+              <button 
+              onClick={() => setShowGlobalAlertModal(true)}
+              style={{ width: "100%", padding: "1.2rem", background: "linear-gradient(135deg, #4285F4, #1A73E8)", color: "white", border: "none", borderRadius: "var(--radius-lg)", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", fontSize: "1rem", boxShadow: "0 4px 16px rgba(66, 133, 244, 0.4)" }}
+            >
+              <Bell size={24} /> NOTIFICAR TODOS
+            </button>
+
+              
+            {globalNotifications.length > 0 && (
+              <div style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                <h4 style={{ margin: "0", color: "var(--color-text-secondary)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Histórico de Notificações</h4>
+                <div style={{ maxHeight: "300px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.5rem", paddingRight: "0.5rem" }}>
+                  {globalNotifications.map((notif: any) => {
+                    const isRead = notif.readBy?.includes(user?.uid);
+                    return (
+                      <div 
+                        key={notif.id}
+                        onClick={() => markGlobalNotificationAsRead(notif)}
+                        style={{ 
+                          padding: "1rem", 
+                          background: isRead ? "var(--color-surface)" : "linear-gradient(135deg, rgba(249,115,22,0.1), rgba(234,88,12,0.05))",
+                          border: isRead ? "1px solid var(--color-border)" : "1px solid rgba(249,115,22,0.3)",
+                          borderRadius: "var(--radius-md)",
+                          cursor: "pointer"
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.25rem" }}>
+                          <span style={{ fontWeight: 700, fontSize: "0.85rem", color: isRead ? "var(--color-text-primary)" : "#f97316" }}>{notif.senderName}</span>
+                          <span style={{ fontSize: "0.7rem", color: "var(--color-text-tertiary)", display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                            {new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {isRead ? <CheckCheck size={14} color="#3b82f6" /> : <Check size={14} />}
+                          </span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-text-secondary)", lineHeight: 1.4 }}>{notif.message}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div style={{ height: "1px", background: "var(--color-border)", margin: "0.5rem 0" }} />
+              <h4 style={{ margin: "0 0 0.5rem", color: "var(--color-text-secondary)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Canais Zello</h4>
+
+              {activeWorkplace?.zelloChannelLink ? (
+                <a href={activeWorkplace.zelloChannelLink} style={{ padding: "1.2rem", background: "var(--color-surface)", border: "1px solid rgba(249,115,22,0.3)", borderRadius: "var(--radius-lg)", fontWeight: 700, color: "var(--color-text-primary)", textDecoration: "none", display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "1rem" }}>
+                  <div style={{ width: "40px", height: "40px", borderRadius: "50%", background: "rgba(249,115,22,0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "#f97316" }}><Radio size={20} /></div>
+                  Rádio Vigias
+                </a>
+              ) : (
+                <div style={{ padding: "1.2rem", background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "0.75rem", opacity: 0.5 }}>
+                   <div style={{ width: "40px", height: "40px", borderRadius: "50%", background: "var(--color-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}><Radio size={20} /></div>
+                   Canal Vigias não configurado
+                </div>
+              )}
+
+              {(activeWorkplace as any)?.zelloGroupLink ? (
+                <a href={(activeWorkplace as any).zelloGroupLink} style={{ padding: "1.2rem", background: "var(--color-surface)", border: "1px solid rgba(168,85,247,0.3)", borderRadius: "var(--radius-lg)", fontWeight: 700, color: "var(--color-text-primary)", textDecoration: "none", display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "1rem" }}>
+                  <div style={{ width: "40px", height: "40px", borderRadius: "50%", background: "rgba(168,85,247,0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "#a855f7" }}><Radio size={20} /></div>
+                  Rádio Capitães/Coord.
+                </a>
+              ) : (
+                <div style={{ padding: "1.2rem", background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "0.75rem", opacity: 0.5 }}>
+                   <div style={{ width: "40px", height: "40px", borderRadius: "50%", background: "var(--color-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}><Radio size={20} /></div>
+                   Canal Capitães não configurado
+                </div>
               )}
             </div>
-            <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "#a855f7" }}>Suspeito</span>
-          </button>
-          <button onClick={() => { stopAlertBeeps(); setActivePanel("incidents"); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.3rem", background: "none", border: "none", cursor: "pointer", flex: "1 0 auto" }}>
-            <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: "linear-gradient(135deg, #dc2626, #ef4444)", boxShadow: "0 3px 12px rgba(239,68,68,0.45)", display: "flex", alignItems: "center", justifyContent: "center", color: "white" }}>
-              <FileWarning size={20} />
-            </div>
-            <span style={{ fontSize: "0.65rem", fontWeight: 700, color: "#ef4444" }}>Ocorrência</span>
-          </button>
+          </div>
+        )}
 
-      <button onClick={() => setActivePanel(activePanel === 'info' ? null : 'info')} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.3rem", background: "none", border: "none", cursor: "pointer", flex: "1 0 auto" }}>
-        <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: "var(--color-bg)", border: "1.5px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-secondary)", position: "relative" }}>
-          <Info size={20} />
-        </div>
-        <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "var(--color-text-secondary)" }}>Informação</span>
-      </button>
-    </div>
+        {showGlobalAlertModal && (
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: "calc(76px + env(safe-area-inset-bottom))", background: "var(--color-bg)", zIndex: 10001, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div style={{ background: "linear-gradient(135deg, #1e0a3c, #5b1030)", padding: "1.25rem 1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "rgba(255,255,255,0.2)", border: "1px solid rgba(255,255,255,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Bell size={18} color="#ffffff" />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, color: "#ffffff", fontSize: "1rem", fontWeight: 700 }}>Notificar Todos</h3>
+                  <p style={{ margin: 0, fontSize: "0.75rem", color: "#fca5a5" }}>Alerta Geral para Equipas</p>
+                </div>
+              </div>
+              <button onClick={() => setShowGlobalAlertModal(false)} style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "white", cursor: "pointer", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={18} /></button>
+            </div>
+            <div style={{ padding: "1.5rem", flex: 1, display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600, color: "var(--color-text-secondary)", fontSize: "0.85rem" }}>Mensagem de Alerta</label>
+                <textarea 
+                  className="input" 
+                  rows={5} 
+                  value={globalAlertText} 
+                  onChange={e => setGlobalAlertText(e.target.value)}
+                  placeholder="Escreva a mensagem que todos os vigias vão receber no telemóvel..."
+                  style={{ resize: "vertical" }}
+                />
+              </div>
+              <button 
+                onClick={sendGlobalAlert} 
+                disabled={sendingGlobalAlert || !globalAlertText}
+                style={{
+                  width: "100%", padding: "1rem", background: "var(--color-danger)", color: "white",
+                  border: "none", borderRadius: "var(--radius-md)", fontWeight: 700, fontSize: "1rem",
+                  cursor: (sendingGlobalAlert || !globalAlertText) ? "not-allowed" : "pointer",
+                  opacity: (sendingGlobalAlert || !globalAlertText) ? 0.6 : 1,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem"
+                }}
+              >
+                {sendingGlobalAlert ? "A ENVIAR..." : "ENVIAR ALERTA"}
+              </button>
+            </div>
+          </div>
+        )}
+
+      <div className="vigia-app-bottom-bar" style={{ zIndex: 20000 }}>
+        {/* Zello */}
+        <button
+          onClick={() => setActivePanel(activePanel === "zello" ? null : "zello")}
+          style={{
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            gap: "0.3rem", background: "none", border: "none", cursor: "pointer", flex: "1 0 auto"
+          }}
+        >
+          <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: "rgba(249, 115, 22, 0.15)", border: "1.5px solid rgba(249,115,22,0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "#f97316" }}>
+            <Radio size={20} fill="currentColor" />
+          </div>
+          <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "#f97316" }}>Rádio</span>
+        </button>
+
+        {/* Suspects */}
+        <button
+          onClick={() => { stopAlertBeeps(); setActivePanel(activePanel === "suspects" ? null : "suspects"); }}
+          style={{
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            gap: "0.3rem", background: "none", border: "none", cursor: "pointer", flex: "1 0 auto"
+          }}
+        >
+          <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: activeSuspects.length > 0 ? "rgba(168,85,247,0.2)" : "rgba(168,85,247,0.08)", border: activeSuspects.length > 0 ? "1.5px solid rgba(168,85,247,0.7)" : "1.5px solid rgba(168,85,247,0.3)", display: "flex", alignItems: "center", justifyContent: "center", color: "#a855f7", position: "relative", animation: activeSuspects.length > 0 ? "suspectPulse 3s ease-in-out infinite" : "none" }}>
+            <UserX size={20} />
+            {activeSuspects.length > 0 && (
+              <span style={{ position: "absolute", top: "-3px", right: "-3px", background: "#a855f7", color: "white", borderRadius: "50%", width: "18px", height: "18px", fontSize: "0.6rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{activeSuspects.length}</span>
+            )}
+          </div>
+          <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "#a855f7" }}>Suspeito</span>
+        </button>
+
+        {/* Incidents */}
+        <button
+          onClick={() => { stopAlertBeeps(); setActivePanel(activePanel === "incidents" ? null : "incidents"); }}
+          style={{
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            gap: "0.3rem", background: "none", border: "none", cursor: "pointer", flex: "1 0 auto"
+          }}
+        >
+          <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: "linear-gradient(135deg, #dc2626, #ef4444)", boxShadow: "0 3px 12px rgba(239,68,68,0.45)", display: "flex", alignItems: "center", justifyContent: "center", color: "white" }}>
+            <FileWarning size={20} />
+          </div>
+          <span style={{ fontSize: "0.65rem", fontWeight: 700, color: "#ef4444" }}>Ocorrência</span>
+        </button>
+
+        {/* Info */}
+        <button
+          onClick={() => setActivePanel(activePanel === "info" ? null : "info")}
+          style={{
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            gap: "0.3rem", background: "none", border: "none", cursor: "pointer", flex: "1 0 auto"
+          }}
+        >
+          <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: "var(--color-bg)", border: "1.5px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-secondary)", position: "relative" }}>
+            <Info size={20} />
+          </div>
+          <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "var(--color-text-secondary)" }}>Informação</span>
+        </button>
+      </div>
 
       {mapModalData && (
         <MapModal
@@ -1430,6 +1743,13 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
           }}
           onClose={() => setMapModalData(null)}
         />
+      )}
+    
+      {selectedPhoto && (
+        <div onClick={() => setSelectedPhoto(null)} style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.9)", zIndex: 100000, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          <img src={selectedPhoto} alt="Zoomed" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: "var(--radius-md)" }} />
+          <button onClick={() => setSelectedPhoto(null)} style={{ position: "absolute", top: "1.5rem", right: "1.5rem", background: "rgba(255,255,255,0.2)", border: "none", color: "white", borderRadius: "50%", width: "40px", height: "40px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>✕</button>
+        </div>
       )}
     </div>
   );
