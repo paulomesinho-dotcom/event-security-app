@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, query, onSnapshot, doc, updateDoc, deleteDoc } from "firebase/firestore";
-import { Plus, Trash2, Edit2, X, Save, AlertCircle, Users, Map as MapIcon, Link as LinkIcon, Menu, Building } from "lucide-react";
+import { Plus, Trash2, Edit2, X, Save, AlertCircle, Users, Map as MapIcon, Link as LinkIcon, Menu, Building, Tent, Anchor, Hospital, TreePine, MapPin, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface Workplace {
   id: string;
@@ -31,6 +31,18 @@ export default function WorkplaceManager() {
   const [captains, setCaptains] = useState<User[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 15;
+
+  const getWorkplaceIcon = (name: string) => {
+    const n = name.toLowerCase();
+    if (n.includes("estádio") || n.includes("arena")) return <Building size={16} color="var(--color-primary)" />;
+    if (n.includes("hospital") || n.includes("saúde")) return <Hospital size={16} color="var(--color-danger)" />;
+    if (n.includes("parque") || n.includes("jardim")) return <TreePine size={16} color="var(--color-success)" />;
+    if (n.includes("marina") || n.includes("praia") || n.includes("rio") || n.includes("douro") || n.includes("porto")) return <Anchor size={16} color="#0ea5e9" />;
+    if (n.includes("tenda") || n.includes("concerto") || n.includes("palco")) return <Tent size={16} color="var(--color-primary)" />;
+    return <MapPin size={16} color="var(--color-primary)" />;
+  };
 
   // Edit/Create Workplace State
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -124,8 +136,8 @@ export default function WorkplaceManager() {
   const saveChanges = async () => {
     if (!draftWorkplace) return;
     
-    if (!draftWorkplace.name || !draftWorkplace.captainId) {
-      alert("Nome e Capitão são obrigatórios.");
+    if (!draftWorkplace.name) {
+      alert("Nome do workplace é obrigatório.");
       return;
     }
 
@@ -149,14 +161,14 @@ export default function WorkplaceManager() {
         <button 
           className="btn btn-primary" 
           onClick={openCreateDrawer}
-          style={{ borderRadius: "var(--radius-full)", padding: "0.5rem 1.2rem", fontSize: "0.875rem", boxShadow: "var(--shadow-sm)", display: "flex", alignItems: "center", gap: "0.5rem" }}
+          style={{ borderRadius: "var(--radius-full)", padding: "0.5rem 1.2rem", fontSize: "0.8rem", boxShadow: "var(--shadow-sm)", display: "flex", alignItems: "center", gap: "0.5rem" }}
         >
           <Plus size={16} /> Novo Workplace
         </button>
       </div>
 
       {/* Google Drive Style Table */}
-      <div style={{ background: "var(--color-surface)", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)", overflow: "hidden" }}>
+      <div style={{ borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
         {workplaces.length > 0 ? (
           <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
             <thead>
@@ -168,7 +180,7 @@ export default function WorkplaceManager() {
               </tr>
             </thead>
             <tbody>
-              {workplaces.map(workplace => {
+              {workplaces.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map(workplace => {
                 const captain = captains.find(c => c.id === workplace.captainId);
                 const isEditing = editingWorkplaceId === workplace.id;
 
@@ -186,13 +198,13 @@ export default function WorkplaceManager() {
                     onMouseLeave={(e) => { if(!isEditing) e.currentTarget.style.background = "transparent" }}
                   >
                     <td style={{ padding: "1rem 1.5rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                      <Building size={16} color="var(--color-primary)" />
-                      <span style={{ fontWeight: 500, color: "var(--color-text-primary)" }}>{workplace.name}</span>
+                      {getWorkplaceIcon(workplace.name)}
+                      <span style={{ fontWeight: 500, color: "var(--color-text-primary)", fontSize: "0.85rem" }}>{workplace.name}</span>
                     </td>
                     <td style={{ padding: "1rem 1.5rem" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                         <Users size={14} color="var(--color-text-secondary)" />
-                        <span style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>{captain?.name || "Desconhecido"}</span>
+                        <span style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)" }}>{captain?.name || "Desconhecido"}</span>
                       </div>
                     </td>
                     <td style={{ padding: "1rem 1.5rem" }}>
@@ -233,6 +245,31 @@ export default function WorkplaceManager() {
         )}
       </div>
 
+      {/* Pagination Controls */}
+      {workplaces.length > ITEMS_PER_PAGE && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1rem", padding: "0 0.5rem" }}>
+          <span style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)" }}>
+            A mostrar {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, workplaces.length)} de {workplaces.length}
+          </span>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button 
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              style={{ padding: "0.4rem", borderRadius: "var(--radius-md)", background: "var(--color-surface)", border: "1px solid var(--color-border)", cursor: currentPage === 1 ? "not-allowed" : "pointer", opacity: currentPage === 1 ? 0.5 : 1 }}
+            >
+              <ChevronLeft size={16} color="var(--color-text-primary)" />
+            </button>
+            <button 
+              onClick={() => setCurrentPage(p => Math.min(Math.ceil(workplaces.length / ITEMS_PER_PAGE), p + 1))}
+              disabled={currentPage === Math.ceil(workplaces.length / ITEMS_PER_PAGE)}
+              style={{ padding: "0.4rem", borderRadius: "var(--radius-md)", background: "var(--color-surface)", border: "1px solid var(--color-border)", cursor: currentPage === Math.ceil(workplaces.length / ITEMS_PER_PAGE) ? "not-allowed" : "pointer", opacity: currentPage === Math.ceil(workplaces.length / ITEMS_PER_PAGE) ? 0.5 : 1 }}
+            >
+              <ChevronRight size={16} color="var(--color-text-primary)" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Drawer Overlay */}
       {isDrawerOpen && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(2px)", zIndex: 9999, transition: "opacity 0.3s" }} onClick={closeDrawer} />
@@ -263,7 +300,7 @@ export default function WorkplaceManager() {
             <>
               {/* General Info */}
               <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                <h4 style={{ margin: 0, fontSize: "0.9rem", color: "var(--color-text-primary)", textTransform: "uppercase", letterSpacing: "0.05em", opacity: 0.7 }}>Informação Geral</h4>
+                <h4 style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-text-primary)", textTransform: "uppercase", letterSpacing: "0.05em", opacity: 0.7 }}>Informação Geral</h4>
                 
                 <div>
                   <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--color-text-secondary)", display: "block", marginBottom: "0.25rem" }}>Nome do Workplace</label>
@@ -291,11 +328,36 @@ export default function WorkplaceManager() {
                 </div>
               </div>
 
+              {/* Plans Selection */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                <h4 style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-text-primary)", textTransform: "uppercase", letterSpacing: "0.05em", opacity: 0.7, display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                  <MapIcon size={14} /> Plantas Atribuídas
+                </h4>
+                
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", background: "var(--color-bg)", padding: "0.5rem", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)" }}>
+                  {plans.map(plan => {
+                    const isAssigned = (draftWorkplace.planIds || []).includes(plan.id);
+                    return (
+                      <label key={plan.id} style={{ display: "flex", alignItems: "center", gap: "0.75rem", cursor: "pointer", padding: "0.6rem", borderRadius: "var(--radius-sm)", background: isAssigned ? "rgba(59, 130, 246, 0.05)" : "transparent", transition: "background 0.15s" }} onMouseEnter={e => e.currentTarget.style.background = isAssigned ? "rgba(59, 130, 246, 0.1)" : "rgba(0,0,0,0.02)"} onMouseLeave={e => e.currentTarget.style.background = isAssigned ? "rgba(59, 130, 246, 0.05)" : "transparent"}>
+                        <input 
+                          type="checkbox" 
+                          checked={isAssigned} 
+                          onChange={() => togglePlanInDraft(plan.id)} 
+                          style={{ cursor: "pointer", width: "1.1rem", height: "1.1rem", accentColor: "var(--color-primary)" }} 
+                        />
+                        <span style={{ fontSize: "0.8rem", fontWeight: isAssigned ? 600 : 400, color: isAssigned ? "var(--color-primary)" : "var(--color-text-primary)" }}>{plan.name}</span>
+                      </label>
+                    );
+                  })}
+                  {plans.length === 0 && <span style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", padding: "0.5rem" }}>Nenhuma planta carregada.</span>}
+                </div>
+              </div>
+
               <hr style={{ border: "none", borderTop: "1px solid var(--color-border)", margin: "0.5rem 0" }} />
 
               {/* Links */}
               <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                <h4 style={{ margin: 0, fontSize: "0.9rem", color: "var(--color-text-primary)", textTransform: "uppercase", letterSpacing: "0.05em", opacity: 0.7, display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <h4 style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-text-primary)", textTransform: "uppercase", letterSpacing: "0.05em", opacity: 0.7, display: "flex", alignItems: "center", gap: "0.4rem" }}>
                   <LinkIcon size={14} /> Canais de Comunicação
                 </h4>
                 
@@ -335,33 +397,6 @@ export default function WorkplaceManager() {
                   />
                 </div>
               </div>
-
-              <hr style={{ border: "none", borderTop: "1px solid var(--color-border)", margin: "0.5rem 0" }} />
-
-              {/* Plans Selection */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                <h4 style={{ margin: 0, fontSize: "0.9rem", color: "var(--color-text-primary)", textTransform: "uppercase", letterSpacing: "0.05em", opacity: 0.7, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <MapIcon size={14} /> Plantas Atribuídas
-                </h4>
-                
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", background: "var(--color-bg)", padding: "0.5rem", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)" }}>
-                  {plans.map(plan => {
-                    const isAssigned = (draftWorkplace.planIds || []).includes(plan.id);
-                    return (
-                      <label key={plan.id} style={{ display: "flex", alignItems: "center", gap: "0.75rem", cursor: "pointer", padding: "0.6rem", borderRadius: "var(--radius-sm)", background: isAssigned ? "rgba(59, 130, 246, 0.05)" : "transparent", transition: "background 0.15s" }} onMouseEnter={e => e.currentTarget.style.background = isAssigned ? "rgba(59, 130, 246, 0.1)" : "rgba(0,0,0,0.02)"} onMouseLeave={e => e.currentTarget.style.background = isAssigned ? "rgba(59, 130, 246, 0.05)" : "transparent"}>
-                        <input 
-                          type="checkbox" 
-                          checked={isAssigned} 
-                          onChange={() => togglePlanInDraft(plan.id)} 
-                          style={{ cursor: "pointer", width: "1.1rem", height: "1.1rem", accentColor: "var(--color-primary)" }} 
-                        />
-                        <span style={{ fontSize: "0.875rem", fontWeight: isAssigned ? 600 : 400, color: isAssigned ? "var(--color-primary)" : "var(--color-text-primary)" }}>{plan.name}</span>
-                      </label>
-                    );
-                  })}
-                  {plans.length === 0 && <span style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)", padding: "0.5rem" }}>Nenhuma planta carregada.</span>}
-                </div>
-              </div>
             </>
           )}
 
@@ -383,8 +418,8 @@ export default function WorkplaceManager() {
             <button 
               className="btn btn-primary" 
               onClick={saveChanges} 
-              disabled={!hasUnsavedChanges || !draftWorkplace?.name || !draftWorkplace?.captainId}
-              style={{ flex: 2, padding: "0.75rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", opacity: (!hasUnsavedChanges || !draftWorkplace?.name || !draftWorkplace?.captainId) ? 0.5 : 1 }}
+              disabled={!hasUnsavedChanges || !draftWorkplace?.name}
+              style={{ flex: 2, padding: "0.75rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", opacity: (!hasUnsavedChanges || !draftWorkplace?.name) ? 0.5 : 1 }}
             >
               <Save size={18} /> {isCreating ? "Criar Workplace" : "Gravar Alterações"}
             </button>

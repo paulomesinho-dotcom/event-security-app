@@ -161,7 +161,7 @@ export default function DashboardPage() {
     if (!loading && !user) {
       router.push("/login");
     }
-    if (!loading && user && (user.role === "captain" || user.role === "superadmin")) {
+    if (!loading && user && user.role === "captain") {
       if (window.innerWidth <= 768) {
         setIsPatrolMode(true);
       }
@@ -247,8 +247,8 @@ export default function DashboardPage() {
     );
   };
 
-  // If Captain/Superadmin is in Patrol Mode, render the Mobile Dashboard wrapper
-  if ((user.role === "captain" || user.role === "superadmin") && isPatrolMode) {
+  // If Captain is in Patrol Mode, render the Mobile Dashboard wrapper
+  if (user.role === "captain" && isPatrolMode) {
     return (
       <div className="vigia-app-root">
         {activeWorkplaceId ? <EmergencyBanner /> : null}
@@ -266,7 +266,10 @@ export default function DashboardPage() {
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--color-text-secondary)", marginRight: "0.5rem" }}>{user?.name || user?.email?.split('@')[0]}</span>
+            <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--color-text-secondary)", marginRight: "0.5rem" }} className="hidden-mobile">{user?.name || user?.email?.split('@')[0]}</span>
+            <button onClick={() => setIsPatrolMode(false)} className="btn btn-secondary" style={{ padding: "0.4rem", fontSize: "0.75rem", borderRadius: "var(--radius-md)", display: "flex", alignItems: "center", gap: "0.3rem" }} title="Voltar ao Painel de Gestão">
+              <LayoutDashboard size={16} /> <span className="hidden-mobile">Gestão</span>
+            </button>
             <button onClick={handleLogout} className="btn" style={{ padding: "0.4rem", fontSize: "0.75rem", background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: "var(--radius-md)" }} title="Terminar Sessão"><LogOut size={16} /></button>
           </div>
         </nav>
@@ -359,7 +362,7 @@ export default function DashboardPage() {
 
           {/* User Actions Right */}
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            {(user?.role === "captain" || user?.role === "superadmin") && (
+            {user?.role === "captain" && (
                <button 
                  onClick={() => setIsPatrolMode(true)}
                  className="btn btn-primary"

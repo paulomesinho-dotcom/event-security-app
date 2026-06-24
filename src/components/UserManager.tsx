@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, onSnapshot, doc, updateDoc } from "firebase/firestore";
-import { Users, ShieldAlert, Mail } from "lucide-react";
+import { Users, Mail, Edit2, X, Save, AlertCircle, User as UserIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { getAuth, sendPasswordResetEmail } from "firebase/auth";
 
 interface User {
@@ -19,7 +19,14 @@ interface User {
 export default function UserManager() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 15;
+
+  // Drawer State
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [draftUser, setDraftUser] = useState<Partial<User> | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, "users"));
@@ -33,21 +40,8 @@ export default function UserManager() {
     return () => unsub();
   }, []);
 
-  const changeRole = async (userId: string, newRole: string) => {
-    if (!confirm(`Tem a certeza que deseja alterar as permissões deste utilizador para ${newRole}?`)) return;
-    
-    setUpdating(userId);
-    try {
-      await updateDoc(doc(db, "users", userId), { role: newRole });
-    } catch (error) {
-      console.error("Error updating role", error);
-      alert("Erro ao atualizar o utilizador.");
-    } finally {
-      setUpdating(null);
-    }
-  };
-
-  const resetPassword = async (email?: string) => {
+  const resetPassword = async (email?: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     if (!email) {
       alert("Este utilizador não tem email registado.");
       return;
@@ -64,80 +58,280 @@ export default function UserManager() {
     }
   };
 
-  if (loading) return <div>A carregar utilizadores...</div>;
+  const openEditDrawer = (user: User) => {
+    if (hasUnsavedChanges && !confirm("Tem alterações não guardadas. Sair sem gravar?")) return;
+    setEditingUserId(user.id);
+    setDraftUser({ ...user });
+    setHasUnsavedChanges(false);
+    setIsDrawerOpen(true);
+  };
+
+  const closeDrawer = () => {
+    if (hasUnsavedChanges && !confirm("Tem alterações não guardadas. Deseja rejeitar as alterações e fechar?")) return;
+    setIsDrawerOpen(false);
+    setDraftUser(null);
+    setEditingUserId(null);
+    setHasUnsavedChanges(false);
+  };
+
+  const handleDraftChange = (field: keyof User, value: any) => {
+    if (!draftUser) return;
+    setDraftUser({ ...draftUser, [field]: value });
+    setHasUnsavedChanges(true);
+  };
+
+  const saveChanges = async () => {
+    if (!draftUser || !editingUserId) return;
+    
+    try {
+      await updateDoc(doc(db, "users", editingUserId), { 
+        role: draftUser.role,
+        contact: draftUser.contact || "",
+        congregation: draftUser.congregation || ""
+      });
+      setHasUnsavedChanges(false);
+      setIsDrawerOpen(false);
+    } catch (error) {
+      console.error("Error updating user", error);
+      alert("Erro ao atualizar o utilizador.");
+    }
+  };
+
+  if (loading) return <div style={{ padding: "2rem", color: "var(--color-text-secondary)" }}>A carregar utilizadores...</div>;
 
   return (
-    <div>
-      <h3 style={{ color: "var(--color-primary)", marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-        <Users size={20} /> Gestão de Utilizadores
-      </h3>
-      
-      <div style={{ overflowX: "auto" }}>
-        <table className="drive-table">
-          <thead>
-            <tr>
-              <th>Utilizador</th>
-              <th>Detalhes</th>
-              <th>Cargo</th>
-              <th>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map(u => (
-              <tr key={u.id}>
-                
-                <td>
-                  <div style={{ fontWeight: 600, color: "var(--color-text-primary)", fontSize: "0.875rem" }}>{u.name}</div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)" }}>{u.email}</div>
-                </td>
-                
-                <td>
-                  <div style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)" }}>{u.contact || "Sem contacto"}</div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)" }}>{u.congregation || "S/ Congregação"}</div>
-                </td>
-                
-                <td>
-                  <span style={{ 
-                    fontSize: "0.7rem", 
-                    padding: "0.2rem 0.4rem", 
-                    borderRadius: "4px",
-                    fontWeight: 600,
-                    background: u.role === 'superadmin' ? 'var(--color-danger)' : u.role === 'captain' ? 'var(--color-primary)' : 'var(--color-border)',
-                    color: u.role === 'vigia' ? 'var(--color-text-primary)' : 'white',
-                    display: "inline-block"
-                  }}>
-                    {u.role.toUpperCase()}
-                  </span>
-                </td>
-                
-                <td>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                    <select 
-                      className="input" 
-                      style={{ padding: "0.2rem 0.4rem", width: "100px", fontSize: "0.75rem", margin: 0, height: "auto" }}
-                      value={u.role}
-                      onChange={(e) => changeRole(u.id, e.target.value)}
-                      disabled={updating === u.id || u.role === 'superadmin'}
-                    >
-                      <option value="vigia">Vigia</option>
-                      <option value="captain">Capitão</option>
-                    </select>
+    <div style={{ position: "relative", minHeight: "calc(100vh - 100px)" }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+        <h3 style={{ margin: 0, fontWeight: 500, color: "var(--color-text-primary)", fontSize: "1.25rem", display: "none" }}>Gestão de Utilizadores</h3>
+      </div>
 
-                    <button 
-                      title="Enviar Email de Redefinição de Password"
-                      onClick={() => resetPassword(u.email)}
-                      className="btn btn-secondary" 
-                      style={{ padding: "0.3rem 0.5rem" }}
-                    >
-                      <Mail size={14} />
-                    </button>
-                  </div>
-                </td>
-                
+      {/* Google Drive Style Table */}
+      <div style={{ borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
+        {users.length > 0 ? (
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid var(--color-border)", background: "var(--color-bg)", fontSize: "0.8rem", color: "var(--color-text-secondary)" }}>
+                <th style={{ padding: "1rem 1.5rem", fontWeight: 600 }}>Utilizador</th>
+                <th style={{ padding: "1rem 1.5rem", fontWeight: 600 }}>Contacto / Congregação</th>
+                <th style={{ padding: "1rem 1.5rem", fontWeight: 600 }}>Permissões</th>
+                <th style={{ padding: "1rem 1.5rem", fontWeight: 600, textAlign: "right" }}>Ações</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {users.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map(u => {
+                const isEditing = editingUserId === u.id;
+                const isSuperadmin = u.role === 'superadmin';
+
+                return (
+                  <tr 
+                    key={u.id} 
+                    style={{ 
+                      borderBottom: "1px solid var(--color-border)", 
+                      background: isEditing ? "rgba(59, 130, 246, 0.05)" : "transparent",
+                      cursor: "pointer",
+                      transition: "background 0.2s ease"
+                    }}
+                    onClick={() => openEditDrawer(u)}
+                    onMouseEnter={(e) => { if(!isEditing) e.currentTarget.style.background = "var(--color-bg)" }}
+                    onMouseLeave={(e) => { if(!isEditing) e.currentTarget.style.background = "transparent" }}
+                  >
+                    <td style={{ padding: "1rem 1.5rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                      <UserIcon size={16} color="var(--color-primary)" />
+                      <div>
+                        <div style={{ fontWeight: 500, color: "var(--color-text-primary)" }}>{u.name}</div>
+                        <div style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)" }}>{u.email}</div>
+                      </div>
+                    </td>
+                    <td style={{ padding: "1rem 1.5rem" }}>
+                      <div style={{ fontSize: "0.8rem", color: "var(--color-text-primary)" }}>{u.contact || "—"}</div>
+                      <div style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)" }}>{u.congregation || "—"}</div>
+                    </td>
+                    <td style={{ padding: "1rem 1.5rem" }}>
+                      <span style={{ 
+                        fontSize: "0.7rem", 
+                        padding: "0.2rem 0.6rem", 
+                        borderRadius: "var(--radius-full)",
+                        fontWeight: 600,
+                        background: isSuperadmin ? 'rgba(239, 68, 68, 0.1)' : u.role === 'captain' ? 'rgba(59, 130, 246, 0.1)' : 'var(--color-bg)',
+                        color: isSuperadmin ? 'var(--color-danger)' : u.role === 'captain' ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                        display: "inline-block"
+                      }}>
+                        {u.role.toUpperCase()}
+                      </span>
+                    </td>
+                    <td style={{ padding: "1rem 1.5rem", textAlign: "right" }}>
+                      <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+                        <button 
+                           onClick={(e) => { e.stopPropagation(); resetPassword(u.email, e); }} 
+                           className="btn btn-secondary" 
+                           style={{ padding: "0.4rem", borderRadius: "var(--radius-full)", background: "transparent", border: "none" }}
+                           title="Redefinir Palavra-passe"
+                        >
+                          <Mail size={16} color="var(--color-text-secondary)" />
+                        </button>
+                        <button 
+                           onClick={(e) => { e.stopPropagation(); openEditDrawer(u); }} 
+                           className="btn btn-secondary" 
+                           style={{ padding: "0.4rem", borderRadius: "var(--radius-full)", background: "transparent", border: "none" }}
+                           title="Editar Utilizador"
+                        >
+                          <Edit2 size={16} color="var(--color-text-secondary)" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : (
+          <div style={{ textAlign: "center", padding: "4rem 2rem" }}>
+             <p style={{ color: "var(--color-text-secondary)", margin: 0 }}>Nenhum utilizador encontrado.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Pagination Controls */}
+      {users.length > ITEMS_PER_PAGE && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1rem", padding: "0 0.5rem" }}>
+          <span style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)" }}>
+            A mostrar {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, users.length)} de {users.length}
+          </span>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button 
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              style={{ padding: "0.4rem", borderRadius: "var(--radius-md)", background: "var(--color-surface)", border: "1px solid var(--color-border)", cursor: currentPage === 1 ? "not-allowed" : "pointer", opacity: currentPage === 1 ? 0.5 : 1 }}
+            >
+              <ChevronLeft size={16} color="var(--color-text-primary)" />
+            </button>
+            <button 
+              onClick={() => setCurrentPage(p => Math.min(Math.ceil(users.length / ITEMS_PER_PAGE), p + 1))}
+              disabled={currentPage === Math.ceil(users.length / ITEMS_PER_PAGE)}
+              style={{ padding: "0.4rem", borderRadius: "var(--radius-md)", background: "var(--color-surface)", border: "1px solid var(--color-border)", cursor: currentPage === Math.ceil(users.length / ITEMS_PER_PAGE) ? "not-allowed" : "pointer", opacity: currentPage === Math.ceil(users.length / ITEMS_PER_PAGE) ? 0.5 : 1 }}
+            >
+              <ChevronRight size={16} color="var(--color-text-primary)" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Drawer Overlay */}
+      {isDrawerOpen && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(2px)", zIndex: 9999, transition: "opacity 0.3s" }} onClick={closeDrawer} />
+      )}
+
+      {/* Side Drawer */}
+      <div style={{ 
+        position: "fixed", top: 0, right: isDrawerOpen ? 0 : "-500px", width: "100%", maxWidth: "450px", height: "100vh", 
+        background: "var(--color-surface)", boxShadow: "-4px 0 15px rgba(0,0,0,0.1)", zIndex: 10000,
+        transition: "right 0.3s cubic-bezier(0.4, 0, 0.2, 1)", display: "flex", flexDirection: "column"
+      }}>
+        
+        {/* Drawer Header */}
+        <div style={{ padding: "1.5rem", borderBottom: "1px solid var(--color-border)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--color-bg)" }}>
+          <h3 style={{ margin: 0, fontSize: "1.25rem", color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <UserIcon size={20} color="var(--color-primary)" />
+            Editar Utilizador
+          </h3>
+          <button onClick={closeDrawer} style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", cursor: "pointer", padding: "0.5rem" }}>
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Drawer Content */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+          
+          {draftUser && (
+            <>
+              {/* General Info */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                <h4 style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-text-primary)", textTransform: "uppercase", letterSpacing: "0.05em", opacity: 0.7 }}>Informação da Conta</h4>
+                
+                <div>
+                  <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--color-text-secondary)", display: "block", marginBottom: "0.25rem" }}>Nome</label>
+                  <input type="text" className="input" value={draftUser.name || ""} disabled style={{ padding: "0.6rem", background: "var(--color-bg)", opacity: 0.7 }} />
+                </div>
+                
+                <div>
+                  <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--color-text-secondary)", display: "block", marginBottom: "0.25rem" }}>Email</label>
+                  <input type="text" className="input" value={draftUser.email || ""} disabled style={{ padding: "0.6rem", background: "var(--color-bg)", opacity: 0.7 }} />
+                </div>
+                
+                <div>
+                  <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--color-text-secondary)", display: "block", marginBottom: "0.25rem" }}>Permissões (Cargo)</label>
+                  <select 
+                    className="input" 
+                    value={draftUser.role || "vigia"} 
+                    onChange={(e) => handleDraftChange("role", e.target.value)}
+                    disabled={draftUser.role === 'superadmin'}
+                    style={{ padding: "0.6rem", opacity: draftUser.role === 'superadmin' ? 0.7 : 1 }}
+                  >
+                    <option value="vigia">Vigia</option>
+                    <option value="captain">Capitão</option>
+                    {draftUser.role === 'superadmin' && <option value="superadmin">Superadmin</option>}
+                  </select>
+                  {draftUser.role === 'superadmin' && <span style={{ fontSize: "0.75rem", color: "var(--color-danger)", marginTop: "0.25rem", display: "block" }}>Um Superadmin não pode ser alterado por aqui.</span>}
+                </div>
+              </div>
+
+              <hr style={{ border: "none", borderTop: "1px solid var(--color-border)", margin: "0.5rem 0" }} />
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                <h4 style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-text-primary)", textTransform: "uppercase", letterSpacing: "0.05em", opacity: 0.7 }}>Outros Dados</h4>
+                
+                <div>
+                  <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--color-text-secondary)", display: "block", marginBottom: "0.25rem" }}>Contacto</label>
+                  <input 
+                    type="text" 
+                    className="input" 
+                    value={draftUser.contact || ""} 
+                    onChange={(e) => handleDraftChange("contact", e.target.value)}
+                    style={{ padding: "0.6rem" }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--color-text-secondary)", display: "block", marginBottom: "0.25rem" }}>Congregação</label>
+                  <input 
+                    type="text" 
+                    className="input" 
+                    value={draftUser.congregation || ""} 
+                    onChange={(e) => handleDraftChange("congregation", e.target.value)}
+                    style={{ padding: "0.6rem" }}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+        </div>
+
+        {/* Drawer Footer / Save Banner */}
+        <div style={{ padding: "1.5rem", borderTop: "1px solid var(--color-border)", background: hasUnsavedChanges ? "var(--color-bg)" : "var(--color-surface)", transition: "background 0.3s", display: "flex", flexDirection: "column", gap: "1rem" }}>
+          {hasUnsavedChanges && (
+             <div style={{ background: "#fef3c7", color: "#d97706", padding: "0.75rem 1rem", borderRadius: "var(--radius-md)", fontSize: "0.85rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.5rem", border: "1px solid #fcd34d" }}>
+                <AlertCircle size={16} />
+                Tem alterações por gravar!
+             </div>
+          )}
+          
+          <div style={{ display: "flex", gap: "0.75rem", width: "100%" }}>
+            <button className="btn btn-secondary" onClick={closeDrawer} style={{ flex: 1, padding: "0.75rem" }}>
+              Cancelar
+            </button>
+            <button 
+              className="btn btn-primary" 
+              onClick={saveChanges} 
+              disabled={!hasUnsavedChanges}
+              style={{ flex: 2, padding: "0.75rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", opacity: (!hasUnsavedChanges) ? 0.5 : 1 }}
+            >
+              <Save size={18} /> Gravar Alterações
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
   );
