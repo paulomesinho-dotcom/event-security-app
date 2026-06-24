@@ -111,12 +111,31 @@ function getShiftEndTime(shift: Shift): string {
 
 function isWithinShiftTime(shift: Shift): { allowed: boolean; reason: string } {
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
 
-  if (shift.dates) {
-    const shiftDates = shift.dates.split(",").map(d => d.trim());
-    if (!shiftDates.includes(today)) {
-      return { allowed: false, reason: `Programado para: ${shiftDates.join(", ")}` };
+  if (shift.days) {
+    const monthMap: Record<string, number> = {
+      "jan": 0, "fev": 1, "mar": 2, "abr": 3, "mai": 4, "jun": 5,
+      "jul": 6, "ago": 7, "set": 8, "out": 9, "nov": 10, "dez": 11
+    };
+    
+    const shiftDays = shift.days.split(",").map(d => d.trim());
+    let dateMatches = false;
+    for (const d of shiftDays) {
+      const parts = d.split("/");
+      if (parts.length === 2) {
+        const day = parseInt(parts[0], 10);
+        const monthStr = parts[1].toLowerCase();
+        const month = monthMap[monthStr];
+        
+        if (now.getDate() === day && now.getMonth() === month) {
+          dateMatches = true;
+          break;
+        }
+      }
+    }
+    
+    if (!dateMatches) {
+      return { allowed: false, reason: `Apenas no próprio dia (${shift.days})` };
     }
   }
 
@@ -850,6 +869,13 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
                           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
                             <MapPin size={16} color="var(--color-primary)" style={{ flexShrink: 0 }} />
                             <div>
+                              <div style={{ marginBottom: "0.2rem" }}>
+                                {workplaces.find(w => w.planIds?.includes(shift.planId)) && (
+                                  <span style={{ fontSize: "0.65rem", fontWeight: 700, color: "var(--color-primary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                                    {workplaces.find(w => w.planIds?.includes(shift.planId))?.name}
+                                  </span>
+                                )}
+                              </div>
                               <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700 }}>
                                 {shift.local || shift.locatorName}
                               </h4>
