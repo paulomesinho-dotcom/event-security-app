@@ -170,27 +170,54 @@ export default function CaptainSummaryTable() {
                 
                 let lateness = null;
                 if (shift.status !== "completed") {
-                  const match = shift.time.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
-                  if (match) {
-                    const now = new Date();
-                    const currentTotal = now.getHours() * 60 + now.getMinutes();
-                    const [startH, startM] = match[1].split(":").map(Number);
-                    const [endH, endM] = match[2].split(":").map(Number);
-                    const startTotal = startH * 60 + startM;
-                    const endTotal = endH * 60 + endM;
-                    const crossesMidnight = endTotal < startTotal;
+                  const nowObj = new Date();
+                  
+                  // 1. ISO Timestamp Check (Most Reliable)
+                  let isOverdueFromISO = false;
+                  if (shift.status === "pending" && shift.startTime) {
+                    if (new Date(shift.startTime).getTime() < nowObj.getTime()) isOverdueFromISO = true;
+                  } else if (shift.status === "active" && shift.endTime) {
+                    if (new Date(shift.endTime).getTime() < nowObj.getTime()) isOverdueFromISO = true;
+                  }
 
-                    if (shift.status === "pending") {
-                      if (!crossesMidnight) {
-                        if (currentTotal >= startTotal) lateness = "Atrasado a Iniciar";
-                      } else {
-                        if (currentTotal >= startTotal || currentTotal < endTotal) lateness = "Atrasado a Iniciar";
-                      }
-                    } else if (shift.status === "active") {
-                      if (!crossesMidnight) {
-                        if (currentTotal >= endTotal) lateness = "Atrasado a Terminar";
-                      } else {
-                        if (currentTotal >= endTotal && currentTotal < startTotal) lateness = "Atrasado a Terminar";
+                  if (isOverdueFromISO) {
+                    lateness = shift.status === "pending" ? "Atrasado a Iniciar" : "Atrasado a Terminar";
+                  } else if (!shift.startTime && !shift.endTime) {
+                    // 2. Fallback to Legacy Date + Time Check
+                    const todayISO = nowObj.toISOString().slice(0, 10);
+                    const dateStrings = [shift.date, shift.days, shift.dates].filter(Boolean).join(",");
+                    let isTodayOrPast = true;
+                    
+                    if (dateStrings) {
+                      const sDates = dateStrings.split(",").map((d: string) => d.trim());
+                      isTodayOrPast = sDates.some((d: string) => {
+                        if (d === todayISO) return true;
+                        if (d.match(/^\d{4}-\d{2}-\d{2}$/)) return d <= todayISO;
+                        if (d.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+                          const [day, m, y] = d.split("/");
+                          return `${y}-${m}-${day}` <= todayISO;
+                        }
+                        return false;
+                      });
+                    }
+
+                    if (isTodayOrPast) {
+                      const match = shift.time.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+                      if (match) {
+                        const currentTotal = nowObj.getHours() * 60 + nowObj.getMinutes();
+                        const [startH, startM] = match[1].split(":").map(Number);
+                        const [endH, endM] = match[2].split(":").map(Number);
+                        const startTotal = startH * 60 + startM;
+                        const endTotal = endH * 60 + endM;
+                        const crossesMidnight = endTotal < startTotal;
+
+                        if (shift.status === "pending") {
+                          if (!crossesMidnight && currentTotal >= startTotal) lateness = "Atrasado a Iniciar";
+                          else if (crossesMidnight && (currentTotal >= startTotal || currentTotal < endTotal)) lateness = "Atrasado a Iniciar";
+                        } else if (shift.status === "active") {
+                          if (!crossesMidnight && currentTotal >= endTotal) lateness = "Atrasado a Terminar";
+                          else if (crossesMidnight && (currentTotal >= endTotal && currentTotal < startTotal)) lateness = "Atrasado a Terminar";
+                        }
                       }
                     }
                   }
