@@ -301,7 +301,6 @@ export default function CaptainPatrolDashboard({ onOpenMap, isSidebarOpen, force
   
   // Captain Info & Notification
   const [captainName, setCaptainName] = useState("");
-  const [isSendingNotify, setIsSendingNotify] = useState(false);
   
   useEffect(() => {
     const q = query(collection(db, "information"), orderBy("createdAt", "desc"));
@@ -1728,52 +1727,6 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
                        {activeWorkplace.name} <span style={{ color: "var(--color-text-tertiary)", margin: "0 0.5rem" }}>|</span> Capitão: {captainName || "..."}
                     </div>
                  </div>
-                 <button 
-                    onClick={async () => {
-                      const msg = prompt("Que mensagem deseja enviar à equipa?");
-                      if (!msg) return;
-
-                      setIsSendingNotify(true);
-                      try {
-                        const vigiaIdsToNotify = Array.from(userIds);
-                        let successCount = 0;
-                        for (const targetVigiaId of vigiaIdsToNotify) {
-                           const res = await fetch("/api/send-notification", {
-                             method: "POST",
-                             headers: { "Content-Type": "application/json" },
-                             body: JSON.stringify({
-                               vigiaId: targetVigiaId,
-                               title: `Mensagem do Capitão (${activeWorkplace.name})`,
-                               message: msg
-                             })
-                           });
-                           if (res.ok) {
-                             const data = await res.json();
-                             if (!data.error && data.code !== "NO_FCM_TOKEN") {
-                               successCount++;
-                             }
-                           }
-                        }
-                        alert(`Notificação enviada com sucesso a ${successCount} vigia(s).`);
-                      } catch (err) {
-                        console.error(err);
-                        alert("Erro ao contactar servidor.");
-                      } finally {
-                        setIsSendingNotify(false);
-                      }
-                    }}
-                    disabled={isSendingNotify || userIds.size === 0}
-                    style={{
-                       background: "var(--color-surface)", border: "1px solid var(--color-border)",
-                       padding: "0.5rem 1rem", borderRadius: "var(--radius-full)", fontSize: "0.8rem",
-                       color: "#38bdf8", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.5rem",
-                       cursor: (isSendingNotify || userIds.size === 0) ? "not-allowed" : "pointer",
-                       opacity: (isSendingNotify || userIds.size === 0) ? 0.6 : 1
-                    }}
-                 >
-                    <Bell size={14} />
-                    {isSendingNotify ? "A enviar..." : "Notificar Equipa"}
-                 </button>
               </div>
             )}
 
