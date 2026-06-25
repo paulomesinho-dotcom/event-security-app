@@ -33,6 +33,7 @@ const MapViewer = dynamic(() => import("@/components/MapViewer"), { ssr: false }
 
 function WorkplaceSwitcher() {
   const { workplaces, activeWorkplaceId, setActiveWorkplaceId, loadingWorkplaces } = useWorkplace();
+  const [isOpen, setIsOpen] = useState(false);
   const activeName = workplaces.find(w => w.id === activeWorkplaceId)?.name || "Selecione...";
 
   if (loadingWorkplaces || workplaces.length <= 1) return null;
