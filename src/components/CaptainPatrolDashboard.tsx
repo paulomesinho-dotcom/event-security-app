@@ -168,7 +168,7 @@ export default function CaptainPatrolDashboard({ onOpenMap, isSidebarOpen, force
   const { user } = useAuth();
   const [shifts, setShifts] = useState<Shift[]>([]);
 
-  const [teamShifts, setTeamShifts] = useState<any[]>([]);
+  const [allRawShifts, setAllRawShifts] = useState<any[]>([]);
   const [teamVigias, setTeamVigias] = useState<Record<string, any>>({});
   const [locators, setLocators] = useState<any[]>([]);
 
@@ -200,15 +200,12 @@ export default function CaptainPatrolDashboard({ onOpenMap, isSidebarOpen, force
     const unsub = onSnapshot(q, (snap) => {
       const sfts: any[] = [];
       snap.forEach((d) => {
-        const s = { id: d.id, ...d.data() } as any;
-        if (user.role === "superadmin" || s.workplaceId === (forcedWorkplaceId || user.workplaceId)) {
-          sfts.push(s);
-        }
+        sfts.push({ id: d.id, ...d.data() });
       });
-      setTeamShifts(sfts);
+      setAllRawShifts(sfts);
     });
     return () => unsub();
-  }, [user, forcedWorkplaceId]);
+  }, [user]);
 
   const [globalSettings, setGlobalSettings] = useState<any>(null);
   useEffect(() => {
@@ -218,12 +215,6 @@ export default function CaptainPatrolDashboard({ onOpenMap, isSidebarOpen, force
     });
     return () => unsub();
   }, []);
-
-  // Derive
-  const userIds = new Set(teamShifts.filter((s: any) => s.status === 'active' || s.status === 'pending').map((s: any) => s.vigiaId || s.personId || s.userId).filter(Boolean));
-  const activeTeamShifts = teamShifts.filter(s => s.status === "active");
-  const pendingTeamShifts = teamShifts.filter(s => s.status === "pending");
-
 
   const [workplaces, setWorkplaces] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -237,7 +228,7 @@ export default function CaptainPatrolDashboard({ onOpenMap, isSidebarOpen, force
 
   // Incident Reporting
   const [showIncidentModal, setShowIncidentModal] = useState(false);
-    const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [incidentText, setIncidentText] = useState("");
   const [incidentPhoto, setIncidentPhoto] = useState<File | null>(null);
   const [incidentUploading, setIncidentUploading] = useState(false);
@@ -245,8 +236,6 @@ export default function CaptainPatrolDashboard({ onOpenMap, isSidebarOpen, force
   const [expandedIncidentId, setExpandedIncidentId] = useState<string | null>(null);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [incidentTab, setIncidentTab] = useState<"ativas" | "arquivadas">("ativas");
-  const activeIncidents = allIncidents.filter(i => i.status === "open");
-  const archivedIncidents = allIncidents.filter(i => i.status !== "open");
 
   // Suspicious Persons
   
@@ -399,11 +388,9 @@ export default function CaptainPatrolDashboard({ onOpenMap, isSidebarOpen, force
   });
 
   // Instead of showSuspectsList, showIncidentsList, we will replace them where used.
-const [allSuspects, setAllSuspects] = useState<any[]>([]);
+  const [allSuspects, setAllSuspects] = useState<any[]>([]);
   const [suspectTab, setSuspectTab] = useState<"ativos" | "arquivados">("ativos");
-  const activeSuspects = allSuspects.filter(s => s.status === "active");
-  const archivedSuspects = allSuspects.filter(s => s.status !== "active");
-    const [showNewSuspectModal, setShowNewSuspectModal] = useState(false);
+  const [showNewSuspectModal, setShowNewSuspectModal] = useState(false);
   const [selectedSuspect, setSelectedSuspect] = useState<any>(null);
   const [mapModalData, setMapModalData] = useState<any>(null);
   
@@ -568,6 +555,27 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
     ? allPlans.filter(p => activeWorkplace.planIds.includes(p.id))
     : allPlans;
 
+  // Dynamic filtered lists for active workplace
+  const teamShifts = useMemo(() => {
+    return allRawShifts.filter(s => {
+      if (forcedWorkplaceId || activeWorkplace) {
+        const targetWp = activeWorkplace || workplaces.find(w => w.id === forcedWorkplaceId);
+        if (!targetWp) return false;
+        if (s.workplaceId && s.workplaceId === targetWp.id) return true;
+        if (targetWp.planIds && targetWp.planIds.includes(s.planId)) return true;
+        if (targetWp.captainId && s.captainId === targetWp.captainId) return true;
+        const loc = locators.find(l => l.id === s.locatorId);
+        if (loc && targetWp.planIds && targetWp.planIds.includes(loc.planId)) return true;
+        return false;
+      }
+      if (user?.role === "captain") return s.captainId === user.uid;
+      return true;
+    });
+  }, [allRawShifts, forcedWorkplaceId, activeWorkplace, workplaces, locators, user]);
+
+  const activeTeamShifts = useMemo(() => teamShifts.filter(s => s.status === "active"), [teamShifts]);
+  const pendingTeamShifts = useMemo(() => teamShifts.filter(s => s.status === "pending"), [teamShifts]);
+
   // Emergency monitoring calculation
   const isGlobalEmergency = globalSettings?.globalEmergency === true;
   const isLocalEmergency = activeWorkplace?.isEmergency === true;
@@ -582,31 +590,105 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
     ...(isLocalEmergency ? (activeWorkplace?.evacAck || []) : [])
   ]);
 
-  const workplaceGuardsList = Object.values(teamVigias).filter((u: any) => {
-    if (!u || u.role === "superadmin" || u.role === "admin" || u.role === "captain") return false;
-    return u.workplaceId === activeWorkplace?.id || teamShifts.some(s => s.vigiaId === u.id || s.personId === u.id || s.userId === u.id);
-  });
+  const workplaceGuardsList = useMemo(() => {
+    return Object.values(teamVigias).filter((u: any) => {
+      if (!u || u.role === "superadmin" || u.role === "admin" || u.role === "captain") return false;
+      if (activeWorkplace && u.workplaceId === activeWorkplace.id) return true;
+      return teamShifts.some(s => s.vigiaId === u.id || s.personId === u.id || s.userId === u.id);
+    });
+  }, [teamVigias, activeWorkplace, teamShifts]);
+
+  const activeIncidents = useMemo(() => {
+    return allIncidents.filter(i => {
+      if (i.status !== "open") return false;
+      if (!activeWorkplace) return true;
+      if (i.workplaceId === activeWorkplace.id) return true;
+      if (i.vigiaId && workplaceGuardsList.some(g => g.id === i.vigiaId)) return true;
+      const sft = allRawShifts.find(s => s.id === i.shiftId);
+      if (sft && activeWorkplace.planIds?.includes(sft.planId)) return true;
+      return false;
+    });
+  }, [allIncidents, activeWorkplace, workplaceGuardsList, allRawShifts]);
+
+  const archivedIncidents = useMemo(() => {
+    return allIncidents.filter(i => {
+      if (i.status === "open") return false;
+      if (!activeWorkplace) return true;
+      if (i.workplaceId === activeWorkplace.id) return true;
+      if (i.vigiaId && workplaceGuardsList.some(g => g.id === i.vigiaId)) return true;
+      const sft = allRawShifts.find(s => s.id === i.shiftId);
+      if (sft && activeWorkplace.planIds?.includes(sft.planId)) return true;
+      return false;
+    });
+  }, [allIncidents, activeWorkplace, workplaceGuardsList, allRawShifts]);
+
+  const activeSuspects = useMemo(() => {
+    return allSuspects.filter(s => {
+      if (s.status !== "active") return false;
+      if (!activeWorkplace) return true;
+      if (s.workplaceId === activeWorkplace.id) return true;
+      if (s.local && activeWorkplace.name && s.local.toLowerCase().includes(activeWorkplace.name.toLowerCase())) return true;
+      if (s.vigiaId && workplaceGuardsList.some(g => g.id === s.vigiaId)) return true;
+      return false;
+    });
+  }, [allSuspects, activeWorkplace, workplaceGuardsList]);
+
+  const archivedSuspects = useMemo(() => {
+    return allSuspects.filter(s => {
+      if (s.status === "active") return false;
+      if (!activeWorkplace) return true;
+      if (s.workplaceId === activeWorkplace.id) return true;
+      if (s.local && activeWorkplace.name && s.local.toLowerCase().includes(activeWorkplace.name.toLowerCase())) return true;
+      if (s.vigiaId && workplaceGuardsList.some(g => g.id === s.vigiaId)) return true;
+      return false;
+    });
+  }, [allSuspects, activeWorkplace, workplaceGuardsList]);
 
   // Overdue shifts calculation
   const nowObj = new Date();
   const nowMinTotal = nowObj.getHours() * 60 + nowObj.getMinutes();
+  const todayISO = nowObj.toISOString().slice(0, 10);
 
-  const overdueShifts = teamShifts.filter(shift => {
-    if (shift.status === "pending") {
-      const startStr = getShiftStartTime(shift);
-      if (!startStr) return false;
-      const [h, m] = startStr.split(":").map(Number);
-      const startMin = h * 60 + m;
-      return startMin > 0 && startMin < nowMinTotal;
-    } else if (shift.status === "active") {
-      const endStr = getShiftEndTime(shift);
-      if (!endStr) return false;
-      const [h, m] = endStr.split(":").map(Number);
-      const endMin = h * 60 + m;
-      return endMin > 0 && endMin < nowMinTotal;
-    }
-    return false;
-  });
+  const overdueShifts = useMemo(() => {
+    return teamShifts.filter(shift => {
+      if (shift.dates) {
+        const sDates = shift.dates.split(",").map((d: string) => d.trim());
+        const isTodayOrPast = sDates.some((d: string) => {
+          if (d === todayISO) return true;
+          if (d.match(/^\d{4}-\d{2}-\d{2}$/)) return d <= todayISO;
+          if (d.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+            const [day, m, y] = d.split("/");
+            return `${y}-${m}-${day}` <= todayISO;
+          }
+          return false;
+        });
+        if (!isTodayOrPast) return false;
+      }
+      if (shift.days && typeof shift.days === "string") {
+        const d = shift.days.trim();
+        if (d.match(/^\d{4}-\d{2}-\d{2}$/) && d > todayISO) return false;
+        if (d.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+          const [day, m, y] = d.split("/");
+          if (`${y}-${m}-${day}` > todayISO) return false;
+        }
+      }
+
+      if (shift.status === "pending") {
+        const startStr = getShiftStartTime(shift);
+        if (!startStr) return false;
+        const [h, m] = startStr.split(":").map(Number);
+        const startMin = h * 60 + m;
+        return startMin > 0 && startMin < nowMinTotal;
+      } else if (shift.status === "active") {
+        const endStr = getShiftEndTime(shift);
+        if (!endStr) return false;
+        const [h, m] = endStr.split(":").map(Number);
+        const endMin = h * 60 + m;
+        return endMin > 0 && endMin < nowMinTotal;
+      }
+      return false;
+    });
+  }, [teamShifts, nowMinTotal, todayISO]);
 
   useEffect(() => {
     if (activeWorkplace?.captainId) {
@@ -2228,14 +2310,6 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
           <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "1.5rem" }}>
             {!selectedTeamMemberDetails ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                {workplaceGuardsList.length > 0 && (
-                  <button 
-                    onClick={() => setShowDirectMsgModal({ vigiaId: "all", vigiaName: "Todos os Seguranças" })}
-                    style={{ width: "100%", padding: "0.85rem 1rem", marginBottom: "0.5rem", background: "var(--color-surface)", border: "1px solid #10b981", color: "#10b981", borderRadius: "var(--radius-lg)", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", fontSize: "0.9rem", boxShadow: "0 2px 8px rgba(16,185,129,0.15)" }}
-                  >
-                    <Bell size={18} /> Notificar Toda a Equipa
-                  </button>
-                )}
                 {workplaceGuardsList.length === 0 ? (
                   <p style={{ color: "var(--color-text-tertiary)", fontStyle: "italic" }}>Nenhum vigia associado a este local.</p>
                 ) : (
