@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { LogOut, LayoutDashboard, Users, Map, Settings, Clock, MapPin, Building, Plus, Search, HelpCircle, Menu, ChevronDown, AlertTriangle, FileWarning, UserX, Info } from "lucide-react";
+import { LogOut, LayoutDashboard, Users, Map, Settings, Clock, MapPin, Building, Plus, Search, HelpCircle, Menu, ChevronDown, AlertTriangle, FileWarning, UserX, Info, CheckCircle2, X } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import { updatePassword } from "firebase/auth";
 import { collection, query, where, getDocs, getDoc, doc } from "firebase/firestore";
@@ -33,12 +33,9 @@ const MapViewer = dynamic(() => import("@/components/MapViewer"), { ssr: false }
 
 function WorkplaceSwitcher() {
   const { workplaces, activeWorkplaceId, setActiveWorkplaceId, loadingWorkplaces } = useWorkplace();
-  const [isOpen, setIsOpen] = useState(false);
-  
-  if (loadingWorkplaces) return <div style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>A carregar...</div>;
-  if (workplaces.length === 0) return <div style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>Nenhum Workplace</div>;
-  
   const activeName = workplaces.find(w => w.id === activeWorkplaceId)?.name || "Selecione...";
+
+  if (loadingWorkplaces || workplaces.length <= 1) return null;
 
   return (
     <div style={{ position: "relative" }}>
@@ -247,8 +244,9 @@ export default function DashboardPage() {
     );
   };
 
-  // If Captain is in Patrol Mode, render the Mobile Dashboard wrapper
-  if ((user.role === "captain" || user.role === "superadmin") && isPatrolMode) {
+  // If Captain or Admin is in Patrol Mode, render the Mobile Dashboard wrapper
+  if ((user.role === "captain" || user.role === "admin" || user.role === "superadmin") && isPatrolMode) {
+    const activeWp = workplaces.find(w => w.id === activeWorkplaceId);
     return (
       <div className="vigia-app-root">
         {activeWorkplaceId ? <EmergencyBanner /> : null}
@@ -260,9 +258,18 @@ export default function DashboardPage() {
             <Image src="/logo.jpg" alt="Porto 2026 Logo" width={44} height={44} style={{ borderRadius: "var(--radius-md)", objectFit: "cover", flexShrink: 0 }} />
             <div>
               <h1 style={{ fontSize: "1.2rem", color: "var(--color-primary)", fontWeight: 800, margin: 0, lineHeight: 1.1 }}>Porto 2026</h1>
-              <span style={{ fontSize: "0.72rem", color: "var(--color-text-secondary)", fontWeight: 500, marginTop: "0.1rem", display: "block" }}>
-                📍 MODO PATRULHA
-              </span>
+              {workplaces.length > 1 ? (
+                <button 
+                  onClick={() => setShowPatrolWpModal(true)}
+                  style={{ background: "linear-gradient(135deg, rgba(37,99,235,0.12), rgba(29,78,216,0.2))", border: "1px solid rgba(59,130,246,0.4)", color: "#38bdf8", padding: "0.2rem 0.65rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: "0.3rem", marginTop: "0.25rem" }}
+                >
+                  📍 {activeWp?.name || "Escolher Local"} ▼
+                </button>
+              ) : (
+                <span style={{ fontSize: "0.72rem", color: "var(--color-text-secondary)", fontWeight: 500, marginTop: "0.1rem", display: "block" }}>
+                  📍 {activeWp?.name || "MODO PATRULHA"}
+                </span>
+              )}
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
@@ -274,6 +281,37 @@ export default function DashboardPage() {
           </div>
         </nav>
         <CaptainPatrolDashboard forcedWorkplaceId={activeWorkplaceId} />
+
+        {showPatrolWpModal && (
+          <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.75)", zIndex: 100000, display: "flex", alignItems: "flex-end", backdropFilter: "blur(4px)" }} onClick={() => setShowPatrolWpModal(false)}>
+            <div style={{ background: "var(--color-surface)", width: "100%", borderTopLeftRadius: "24px", borderTopRightRadius: "24px", padding: "1.5rem", maxHeight: "80vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1rem", borderTop: "1px solid var(--color-border)" }} onClick={e => e.stopPropagation()}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--color-border)", paddingBottom: "0.75rem" }}>
+                <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800, color: "var(--color-text-primary)" }}>Selecione o Local de Trabalho</h3>
+                <button onClick={() => setShowPatrolWpModal(false)} style={{ background: "none", border: "none", color: "var(--color-text-tertiary)", cursor: "pointer" }}><X size={20} /></button>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                {workplaces.map(w => (
+                  <button
+                    key={w.id}
+                    onClick={() => {
+                      setActiveWorkplaceId(w.id);
+                      setShowPatrolWpModal(false);
+                    }}
+                    style={{
+                      padding: "1rem", borderRadius: "14px", border: w.id === activeWorkplaceId ? "2px solid #38bdf8" : "1px solid var(--color-border)",
+                      background: w.id === activeWorkplaceId ? "rgba(56,189,248,0.15)" : "var(--color-bg)",
+                      color: w.id === activeWorkplaceId ? "#38bdf8" : "var(--color-text-primary)",
+                      fontWeight: w.id === activeWorkplaceId ? 800 : 600, fontSize: "0.95rem", textAlign: "left", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center"
+                    }}
+                  >
+                    <span>📍 {w.name}</span>
+                    {w.id === activeWorkplaceId && <CheckCircle2 size={18} />}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -357,12 +395,12 @@ export default function DashboardPage() {
               <span className="hidden-mobile">Olá,</span>
               <span style={{ color: "var(--color-primary)", fontWeight: 600 }}>{user?.name || "Utilizador"}</span>
             </div>
-            {(user?.role === "captain" || user?.role === "superadmin") && <WorkplaceSwitcher />}
+            {(user?.role === "captain" || user?.role === "admin" || user?.role === "superadmin") && <WorkplaceSwitcher />}
           </div>
 
           {/* User Actions Right */}
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            {(user?.role === "captain" || user?.role === "superadmin") && (
+            {(user?.role === "captain" || user?.role === "admin" || user?.role === "superadmin") && (
                <button 
                  onClick={() => setIsPatrolMode(true)}
                  className="btn btn-primary"

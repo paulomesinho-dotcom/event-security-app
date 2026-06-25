@@ -206,7 +206,7 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
        e.preventDefault();
     };
     const handleTouch = (e: TouchEvent) => {
-       if (e.touches.length > 1) e.preventDefault();
+       e.preventDefault();
     }
     el.addEventListener("wheel", preventScroll, { passive: false });
     el.addEventListener("touchmove", handleTouch, { passive: false });
@@ -230,7 +230,8 @@ export default function MapViewer({ imageUrl, locators = [], onAddLocator, onLoc
          ref={containerRef}
          onWheel={handleWheel}
          style={{ 
-           overflow: "hidden", 
+           overflow: "auto",
+           scrollbarWidth: "none",
            flex: 1, 
            width: "100%", 
            background: "#e5e7eb",

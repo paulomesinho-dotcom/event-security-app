@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { initAudio, playAlertBeeps, stopAlertBeeps } from "@/lib/audioAlert";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, updateDoc, getDoc, addDoc, orderBy, limit, arrayUnion } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, updateDoc, getDoc, addDoc, orderBy, limit, arrayUnion, getDocs, setDoc } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import NotificationModal from "@/components/NotificationModal";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,9 +22,9 @@ const compressImage = (file: File): Promise<Blob> => {
       const img = new window.Image();
       img.src = event.target?.result as string;
       img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const MAX_WIDTH = 1000;
-        const MAX_HEIGHT = 1000;
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1024;
+        const MAX_HEIGHT = 1024;
         let width = img.width;
         let height = img.height;
 
@@ -41,16 +41,16 @@ const compressImage = (file: File): Promise<Blob> => {
         }
         canvas.width = width;
         canvas.height = height;
-        const ctx = canvas.getContext("2d");
+        const ctx = canvas.getContext('2d');
         ctx?.drawImage(img, 0, 0, width, height);
         canvas.toBlob((blob) => {
           if (blob) resolve(blob);
-          else reject(new Error("Canvas to Blob failed"));
-        }, "image/jpeg", 0.7);
+          else reject(new Error('Canvas to Blob failed'));
+        }, 'image/jpeg', 0.7);
       };
-      img.onerror = (e) => reject(e);
+      img.onerror = (error) => reject(error);
     };
-    reader.onerror = (e) => reject(e);
+    reader.onerror = (error) => reject(error);
   });
 };
 
@@ -58,13 +58,6 @@ interface Shift {
   id: string;
   locatorId: string;
   locatorName: string;
-  local?: string;
-  sublocal?: string;
-  subsublocal?: string;
-  planId: string;
-  status: "pending" | "active" | "completed";
-  startTime: string;
-  name?: string;
   time?: string;
   days?: string;
   morningStart?: string;
@@ -294,6 +287,84 @@ export default function CaptainPatrolDashboard({ onOpenMap, isSidebarOpen, force
   const [showDirectMsgModal, setShowDirectMsgModal] = useState<{ vigiaId: string; vigiaName: string } | null>(null);
   const [directMsgText, setDirectMsgText] = useState("");
   const [sendingDirectMsg, setSendingDirectMsg] = useState(false);
+  
+  // Admin Emergency Panel State
+  const [showAdminEmergencyModal, setShowAdminEmergencyModal] = useState(false);
+  const [showAdminMissingModal, setShowAdminMissingModal] = useState(false);
+  const [adminMissingDesc, setAdminMissingDesc] = useState("");
+  const [adminMissingPhoto, setAdminMissingPhoto] = useState<File | null>(null);
+  const [isDisseminating, setIsDisseminating] = useState(false);
+
+  const handleTriggerTotalEvacuation = async () => {
+    const isGlobEmerg = globalSettings?.globalEmergency === true;
+    if (!confirm(isGlobEmerg ? "Tem a certeza que deseja DESATIVAR a Evacuação Total (Global)?" : "⚠️ ATENÇÃO: Tem a certeza que deseja ATIVAR A EVACUAÇÃO TOTAL (GLOBAL)? Todos os terminais receberão um alarme sonoro.")) return;
+    try {
+      if (isGlobEmerg) {
+        const q = query(collection(db, "emergency_history"), where("type", "==", "global"), where("status", "==", "active"), where("alertType", "==", "evacuation"));
+        const snap = await getDocs(q);
+        const promises = snap.docs.map(d => updateDoc(doc(db, "emergency_history", d.id), { status: "closed", endTime: new Date().toISOString() }));
+        await Promise.all(promises);
+        await setDoc(doc(db, "settings", "global"), { globalEmergency: false }, { merge: true });
+      } else {
+        await setDoc(doc(db, "settings", "global"), { globalEmergency: true, globalAlertType: "evacuation", globalAlertAck: [user?.uid || ""], globalEvacAck: [] }, { merge: true });
+        await addDoc(collection(db, "emergency_history"), { type: "global", alertType: "evacuation", status: "active", startTime: new Date().toISOString(), initiatedBy: user?.uid });
+      }
+    } catch(err) { alert("Erro ao processar emergência global."); }
+  };
+
+  const handleTriggerZoneAlert = async () => {
+    let targetWp: any = null;
+    if (forcedWorkplaceId) targetWp = workplaces.find(w => w.id === forcedWorkplaceId);
+    if (!targetWp && user?.workplaceId) targetWp = workplaces.find(w => w.id === user.workplaceId);
+    if (!targetWp && workplaces.length > 0) targetWp = workplaces[0];
+    if (!targetWp) { alert("Nenhum local selecionado."); return; }
+
+    const targetWpId = targetWp.id;
+    const isLocEmerg = targetWp.isEmergency === true;
+    if (!confirm(isLocEmerg ? "Desativar Alerta de Zona neste local?" : `⚠️ ATENÇÃO: Tem a certeza que deseja ATIVAR O ALERTA DE ZONA em ${targetWp.name || 'Recinto'}?`)) return;
+    try {
+      if (isLocEmerg) {
+        const q = query(collection(db, "emergency_history"), where("type", "==", "workplace"), where("workplaceId", "==", targetWpId), where("status", "==", "active"));
+        const snap = await getDocs(q);
+        const promises = snap.docs.map(d => updateDoc(doc(db, "emergency_history", d.id), { status: "closed", endTime: new Date().toISOString() }));
+        await Promise.all(promises);
+        await setDoc(doc(db, "workplaces", targetWpId), { isEmergency: false }, { merge: true });
+      } else {
+        await setDoc(doc(db, "workplaces", targetWpId), { isEmergency: true, alertAck: [user?.uid || ""], evacAck: [] }, { merge: true });
+        await addDoc(collection(db, "emergency_history"), { type: "workplace", alertType: "evacuation", workplaceId: targetWpId, status: "active", startTime: new Date().toISOString(), initiatedBy: user?.uid });
+      }
+    } catch(err) { alert("Erro ao processar alerta de zona."); }
+  };
+
+  const handleSubmitMissingPerson = async () => {
+    if (!adminMissingDesc.trim()) { alert("Insira uma descrição para a pessoa desaparecida."); return; }
+    setIsDisseminating(true);
+    try {
+      let photoUrl = "";
+      if (adminMissingPhoto) {
+        const storage = getStorage();
+        const fileRef = ref(storage, `alerts/missing_${Date.now()}`);
+        await uploadBytes(fileRef, adminMissingPhoto);
+        photoUrl = await getDownloadURL(fileRef);
+      }
+      await addDoc(collection(db, "emergency_history"), {
+        type: "global",
+        alertType: "missing_person",
+        status: "active",
+        startTime: new Date().toISOString(),
+        initiatedBy: user?.uid,
+        description: adminMissingDesc.trim(),
+        photoUrl,
+        alertAck: [user?.uid || ""]
+      });
+      setAdminMissingDesc("");
+      setAdminMissingPhoto(null);
+      setShowAdminMissingModal(false);
+      setShowAdminEmergencyModal(false);
+      alert("Alerta de Pessoa Desaparecida emitido com sucesso para todas as equipas.");
+    } catch(err) { alert("Erro ao emitir alerta de pessoa desaparecida."); }
+    finally { setIsDisseminating(false); }
+  };
   
   // Info Data
   const [infoItems, setInfoItems] = useState<any[]>([]);
@@ -1821,6 +1892,15 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
                   >
                     <Users size={20} /> VER EQUIPA
                   </button>
+
+                  {(user?.role === "admin" || user?.role === "superadmin") && (
+                    <button 
+                      onClick={() => setShowAdminEmergencyModal(true)}
+                      style={{ width: "100%", padding: "1rem", background: "linear-gradient(135deg, #ef4444, #dc2626)", color: "white", border: "none", borderRadius: "var(--radius-lg)", fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", fontSize: "0.95rem", boxShadow: "0 4px 12px rgba(239, 68, 68, 0.35)", letterSpacing: "0.03em" }}
+                    >
+                      <ShieldAlert size={20} /> EMERGÊNCIA
+                    </button>
+                  )}
                 </div>
 
                 <div style={{ height: "1px", background: "var(--color-border)", margin: "0.25rem 0" }} />
@@ -2148,6 +2228,14 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
           <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "1.5rem" }}>
             {!selectedTeamMemberDetails ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                {workplaceGuardsList.length > 0 && (
+                  <button 
+                    onClick={() => setShowDirectMsgModal({ vigiaId: "all", vigiaName: "Todos os Seguranças" })}
+                    style={{ width: "100%", padding: "0.85rem 1rem", marginBottom: "0.5rem", background: "var(--color-surface)", border: "1px solid #10b981", color: "#10b981", borderRadius: "var(--radius-lg)", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", fontSize: "0.9rem", boxShadow: "0 2px 8px rgba(16,185,129,0.15)" }}
+                  >
+                    <Bell size={18} /> Notificar Toda a Equipa
+                  </button>
+                )}
                 {workplaceGuardsList.length === 0 ? (
                   <p style={{ color: "var(--color-text-tertiary)", fontStyle: "italic" }}>Nenhum vigia associado a este local.</p>
                 ) : (
@@ -2170,7 +2258,18 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
                             </div>
                           </div>
                         </div>
-                        <span style={{ color: "var(--color-text-tertiary)" }}>➔</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowDirectMsgModal({ vigiaId: v.id, vigiaName: v.name || "Segurança" });
+                            }}
+                            style={{ padding: "0.5rem 0.8rem", background: "rgba(16,185,129,0.15)", color: "#10b981", border: "none", borderRadius: "var(--radius-md)", fontWeight: 700, fontSize: "0.8rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.35rem" }}
+                          >
+                            <Bell size={14} /> Notificar
+                          </button>
+                          <span style={{ color: "var(--color-text-tertiary)" }}>➔</span>
+                        </div>
                       </div>
                     );
                   })
@@ -2257,6 +2356,120 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
         <div onClick={() => setSelectedPhoto(null)} style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.9)", zIndex: 100000, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
           <img src={selectedPhoto} alt="Zoomed" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: "var(--radius-md)" }} />
           <button onClick={() => setSelectedPhoto(null)} style={{ position: "absolute", top: "1.5rem", right: "1.5rem", background: "rgba(255,255,255,0.2)", border: "none", color: "white", borderRadius: "50%", width: "40px", height: "40px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>✕</button>
+        </div>
+      )}
+
+      {/* MODAL GESTÃO DE EMERGÊNCIAS DO ADMIN */}
+      {showAdminEmergencyModal && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", zIndex: 100000, display: "flex", alignItems: "flex-end", backdropFilter: "blur(4px)" }} onClick={() => setShowAdminEmergencyModal(false)}>
+          <div style={{ background: "var(--color-surface)", width: "100%", borderTopLeftRadius: "24px", borderTopRightRadius: "24px", padding: "1.5rem", maxHeight: "85vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1.25rem", borderTop: "1px solid var(--color-border)" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--color-border)", paddingBottom: "0.75rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "#ef4444", fontWeight: 800, fontSize: "1.1rem" }}>
+                <ShieldAlert size={24} /> <span>Comando de Emergência</span>
+              </div>
+              <button onClick={() => setShowAdminEmergencyModal(false)} style={{ background: "none", border: "none", color: "var(--color-text-tertiary)", cursor: "pointer" }}><X size={22} /></button>
+            </div>
+
+            <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-text-secondary)" }}>
+              Selecione o protocolo de emergência a disparar no recinto operacional:
+            </p>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+              {/* 1. Evacuação Total */}
+              <div style={{ padding: "1.1rem", background: "var(--color-bg)", borderRadius: "16px", border: "1px solid var(--color-border)", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                  <AlertTriangle size={20} color="#ef4444" />
+                  <span style={{ fontWeight: 800, fontSize: "0.95rem", color: "var(--color-text-primary)" }}>Evacuação Total (Global)</span>
+                </div>
+                <span style={{ fontSize: "0.8rem", color: "var(--color-text-tertiary)" }}>Dispara alarme sonoro em absolutamente todos os terminais do evento.</span>
+                <button
+                  onClick={handleTriggerTotalEvacuation}
+                  style={{
+                    padding: "0.85rem", borderRadius: "12px", border: "none", fontWeight: 800, fontSize: "0.85rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem",
+                    background: globalSettings?.globalEmergency === true ? "transparent" : "#ef4444",
+                    color: globalSettings?.globalEmergency === true ? "#ef4444" : "white",
+                    outline: globalSettings?.globalEmergency === true ? "2px solid #ef4444" : "none"
+                  }}
+                >
+                  <Bell size={18} /> {globalSettings?.globalEmergency === true ? "🛑 DESATIVAR EVACUAÇÃO TOTAL" : "📢 ATIVAR EVACUAÇÃO TOTAL"}
+                </button>
+              </div>
+
+              {/* 2. Alerta de Zona */}
+              <div style={{ padding: "1.1rem", background: "var(--color-bg)", borderRadius: "16px", border: "1px solid var(--color-border)", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                  <MapPin size={20} color="#f97316" />
+                  <span style={{ fontWeight: 800, fontSize: "0.95rem", color: "var(--color-text-primary)" }}>Alerta de Zona (Local Selecionado)</span>
+                </div>
+                <span style={{ fontSize: "0.8rem", color: "var(--color-text-tertiary)" }}>Evacuação e aviso restrito ao recinto operacional ativo.</span>
+                <button
+                  onClick={handleTriggerZoneAlert}
+                  style={{
+                    padding: "0.85rem", borderRadius: "12px", border: "none", fontWeight: 800, fontSize: "0.85rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem",
+                    background: "#f97316",
+                    color: "white"
+                  }}
+                >
+                  <FileWarning size={18} /> ⚠️ ALTERAR ALERTA DE ZONA
+                </button>
+              </div>
+
+              {/* 3. Pessoa Desaparecida */}
+              <div style={{ padding: "1.1rem", background: "var(--color-bg)", borderRadius: "16px", border: "1px solid var(--color-border)", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                  <Users size={20} color="#3b82f6" />
+                  <span style={{ fontWeight: 800, fontSize: "0.95rem", color: "var(--color-text-primary)" }}>Pessoa Desaparecida</span>
+                </div>
+                <span style={{ fontSize: "0.8rem", color: "var(--color-text-tertiary)" }}>Difunde fotografia e descrição prioritária por todas as equipas de vigilantes.</span>
+                <button
+                  onClick={() => setShowAdminMissingModal(true)}
+                  style={{ padding: "0.85rem", borderRadius: "12px", border: "none", background: "#3b82f6", color: "white", fontWeight: 800, fontSize: "0.85rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}
+                >
+                  <Search size={18} /> 🔍 ABRIR REGISTO DE DESAPARECIDO
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL SUB-FORM PESSOA DESAPARECIDA */}
+      {showAdminMissingModal && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.85)", zIndex: 100005, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          <div style={{ background: "var(--color-surface)", width: "100%", maxWidth: "500px", borderRadius: "24px", padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1rem", border: "1px solid var(--color-border)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--color-border)", paddingBottom: "0.75rem" }}>
+              <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800, color: "var(--color-text-primary)" }}>Difusão: Pessoa Desaparecida</h3>
+              <button onClick={() => setShowAdminMissingModal(false)} style={{ background: "none", border: "none", color: "var(--color-text-tertiary)", cursor: "pointer" }}><X size={20} /></button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              <label style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--color-text-secondary)" }}>Descrição Física / Vestuário / Nome *</label>
+              <textarea
+                value={adminMissingDesc}
+                onChange={e => setAdminMissingDesc(e.target.value)}
+                rows={4}
+                placeholder="Ex: Menino de 6 anos, t-shirt azul, calções vermelhos. Responde pelo nome de Diogo."
+                className="input"
+                style={{ width: "100%", padding: "0.75rem", borderRadius: "12px", fontSize: "0.9rem", resize: "none" }}
+              />
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              <label style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--color-text-secondary)" }}>Fotografia (Opcional)</label>
+              <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", padding: "1rem", border: "2px dashed var(--color-border)", borderRadius: "12px", cursor: "pointer", background: "var(--color-bg)", color: "var(--color-text-secondary)", fontWeight: 600, fontSize: "0.85rem" }}>
+                <Camera size={20} />
+                <span>{adminMissingPhoto ? adminMissingPhoto.name : "Tirar foto ou carregar imagem"}</span>
+                <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => setAdminMissingPhoto(e.target.files?.[0] || null)} />
+              </label>
+            </div>
+
+            <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem" }}>
+              <button onClick={() => setShowAdminMissingModal(false)} className="btn btn-secondary" style={{ flex: 1, padding: "0.85rem", borderRadius: "12px", fontWeight: 700 }}>Cancelar</button>
+              <button onClick={handleSubmitMissingPerson} disabled={isDisseminating} style={{ flex: 2, padding: "0.85rem", borderRadius: "12px", background: "#3b82f6", color: "white", border: "none", fontWeight: 800, cursor: "pointer" }}>
+                {isDisseminating ? "A difundir..." : "📢 DIFUNDIR ALERTA AGORA"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

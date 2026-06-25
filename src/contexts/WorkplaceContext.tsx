@@ -50,7 +50,7 @@ export const WorkplaceProvider = ({ children }: { children: React.ReactNode }) =
     let q;
     if (user.role === "captain") {
       q = query(collection(db, "workplaces"), where("captainId", "==", user.uid));
-    } else if (user.role === "superadmin") {
+    } else if (user.role === "superadmin" || user.role === "admin") {
       q = query(collection(db, "workplaces"));
     } else if (user.role === "vigia") {
       // For Vigia, we don't load all workplaces, but we need to know their active workplace ID
