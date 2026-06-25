@@ -1272,18 +1272,8 @@ export default function CaptainPatrolDashboard({ onOpenMap, isSidebarOpen, force
                    const locator = locators.find(l => l.id === shift.locatorId);
                    const vigia = teamVigias[shift.vigiaId || shift.personId || shift.userId];
                    
-                   // Check if overdue
-                   let isOverdue = false;
-                   const now = new Date();
-                   const nowMin = now.getHours() * 60 + now.getMinutes();
-                   const startStr = getShiftStartTime(shift);
-                   if (startStr) {
-                       const [h, m] = startStr.split(":").map(Number);
-                       const startMin = h * 60 + m;
-                       if (startMin > 0 && startMin < nowMin) {
-                           isOverdue = true;
-                       }
-                   }
+                   // Check if overdue using the unified hook logic
+                   const isOverdue = overdueShifts.some(os => os.id === shift.id);
 
                    return (
                      <div key={shift.id} onClick={() => {
@@ -1326,18 +1316,8 @@ export default function CaptainPatrolDashboard({ onOpenMap, isSidebarOpen, force
                    const locator = locators.find(l => l.id === shift.locatorId);
                    const vigia = teamVigias[shift.vigiaId || shift.personId || shift.userId];
                    
-                   // Check if overdue
-                   let isOverdue = false;
-                   const now = new Date();
-                   const nowMin = now.getHours() * 60 + now.getMinutes();
-                   const startStr = getShiftStartTime(shift);
-                   if (startStr) {
-                       const [h, m] = startStr.split(":").map(Number);
-                       const startMin = h * 60 + m;
-                       if (startMin > 0 && startMin < nowMin) {
-                           isOverdue = true;
-                       }
-                   }
+                   // Check if overdue using the unified hook logic
+                   const isOverdue = overdueShifts.some(os => os.id === shift.id);
 
                    
   return (
