@@ -459,7 +459,7 @@ export default function EmergencyDashboard() {
                                   </div>
                                   <div>
                                     <span style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: "0.5rem", textTransform: "uppercase" }}>Mensagem</span>
-                                    <p style={{ margin: 0, fontSize: "0.95rem", lineHeight: 1.5, color: "var(--color-text-primary)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                                    <p style={{ margin: 0, fontSize: "0.95rem", lineHeight: 1.5, color: "var(--color-text-primary)", whiteSpace: "pre-wrap", wordBreak: "normal", overflowWrap: "anywhere" }}>
                                       {activeIncident.message}
                                     </p>
                                   </div>
@@ -733,7 +733,7 @@ export default function EmergencyDashboard() {
                                 <span style={{ display: "inline-block", background: "#eab308", color: "#000", padding: "0.25rem 0.5rem", borderRadius: "var(--radius-full)", fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.5rem" }}>
                                   Iniciado às {new Date(am.startTime).toLocaleTimeString("pt-PT")}
                                 </span>
-                                <p style={{ margin: 0, color: "var(--color-text-primary)", fontSize: "1rem", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{am.description}</p>
+                                <p style={{ margin: 0, color: "var(--color-text-primary)", fontSize: "1rem", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "normal", overflowWrap: "anywhere" }}>{am.description}</p>
                               </div>
                               <button onClick={() => closeMissingPerson(am.id)} style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 1rem", background: "var(--color-bg)", border: "2px solid #eab308", color: "#eab308", borderRadius: "var(--radius-md)", fontWeight: 700, cursor: "pointer", fontSize: "0.85rem" }}>
                                 FECHAR OCORRÊNCIA
@@ -817,7 +817,7 @@ export default function EmergencyDashboard() {
                             {item.resolution && (
                                 <div style={{ background: "rgba(16, 185, 129, 0.05)", padding: "1rem", borderRadius: "var(--radius-md)", marginTop: "1rem", borderLeft: "4px solid #10b981" }}>
                                   <span style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#10b981", textTransform: "uppercase", marginBottom: "0.25rem" }}>Desfecho da Ocorrência</span>
-                                  <p style={{ margin: 0, color: "var(--color-text-primary)", fontSize: "0.95rem", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{item.resolution}</p>
+                                  <p style={{ margin: 0, color: "var(--color-text-primary)", fontSize: "0.95rem", whiteSpace: "pre-wrap", wordBreak: "normal", overflowWrap: "anywhere" }}>{item.resolution}</p>
                                 </div>
                              )}
 

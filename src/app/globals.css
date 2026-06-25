@@ -278,7 +278,7 @@ input, textarea, select {
 }
 
 .sidebar-container {
-  width: 256px;
+  width: 280px;
   display: flex;
   flex-direction: column;
   padding: 1rem;
@@ -312,27 +312,41 @@ input, textarea, select {
 }
 
 /* ===== React Quill Overrides ===== */
-.quill-wrapper {
-  background: var(--color-surface);
-  color: var(--color-text-primary);
-  border-radius: var(--radius-md);
-}
-.quill-wrapper .ql-toolbar {
-  border-top-left-radius: var(--radius-md);
-  border-top-right-radius: var(--radius-md);
-  background: #f8f9fa;
-  border-color: var(--color-border);
-}
-.quill-wrapper .ql-container {
-  border-bottom-left-radius: var(--radius-md);
-  border-bottom-right-radius: var(--radius-md);
-  border-color: var(--color-border);
-  min-height: 150px;
-  font-family: inherit;
-  font-size: 0.875rem;
-}
+.wysiwyg-wrapper {
+    background: var(--color-surface);
+    color: var(--color-text-primary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+  }
+  .rsw-toolbar {
+    border-bottom: 1px solid var(--color-border) !important;
+    background: #f8f9fa !important;
+  }
+  .rsw-editor {
+    min-height: 150px;
+  }
 
-.quill-content-preview { word-break: normal; overflow-wrap: break-word; hyphens: auto; }
+.quill-content-preview, .rsw-editor { 
+  word-break: normal !important; 
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important; 
+  hyphens: none !important; 
+  -webkit-hyphens: none !important;
+  -ms-hyphens: none !important;
+  white-space: pre-wrap !important;
+  line-break: auto !important;
+}
+.quill-content-preview *, .ql-editor * { 
+  word-break: normal !important; 
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important; 
+  hyphens: none !important; 
+  -webkit-hyphens: none !important;
+  -ms-hyphens: none !important;
+  white-space: pre-wrap !important;
+  line-break: auto !important;
+  max-width: 100%;
+}
 .quill-content-preview * { max-width: 100%; }
 .quill-content-preview ul, .quill-content-preview ol {
   padding-left: 1.5rem;

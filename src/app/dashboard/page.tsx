@@ -161,7 +161,7 @@ export default function DashboardPage() {
     if (!loading && !user) {
       router.push("/login");
     }
-    if (!loading && user && user.role === "captain") {
+    if (!loading && user && (user.role === "captain" || user.role === "superadmin")) {
       if (window.innerWidth <= 768) {
         setIsPatrolMode(true);
       }
@@ -248,7 +248,7 @@ export default function DashboardPage() {
   };
 
   // If Captain is in Patrol Mode, render the Mobile Dashboard wrapper
-  if (user.role === "captain" && isPatrolMode) {
+  if ((user.role === "captain" || user.role === "superadmin") && isPatrolMode) {
     return (
       <div className="vigia-app-root">
         {activeWorkplaceId ? <EmergencyBanner /> : null}
@@ -273,7 +273,7 @@ export default function DashboardPage() {
             <button onClick={handleLogout} className="btn" style={{ padding: "0.4rem", fontSize: "0.75rem", background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: "var(--radius-md)" }} title="Terminar Sessão"><LogOut size={16} /></button>
           </div>
         </nav>
-        <CaptainPatrolDashboard />
+        <CaptainPatrolDashboard forcedWorkplaceId={activeWorkplaceId} />
       </div>
     );
   }
@@ -362,7 +362,7 @@ export default function DashboardPage() {
 
           {/* User Actions Right */}
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            {user?.role === "captain" && (
+            {(user?.role === "captain" || user?.role === "superadmin") && (
                <button 
                  onClick={() => setIsPatrolMode(true)}
                  className="btn btn-primary"

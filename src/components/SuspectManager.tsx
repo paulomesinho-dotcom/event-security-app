@@ -101,7 +101,7 @@ export default function SuspectManager() {
                     )}
                     <div style={{ flex: 1, overflow: "hidden" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.2rem" }}>
-                        <p style={{ margin: 0, fontWeight: 600, fontSize: "0.9rem", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{sus.description}</p>
+                        <p style={{ margin: 0, fontWeight: 600, fontSize: "0.9rem", whiteSpace: "pre-wrap", wordBreak: "normal", overflowWrap: "anywhere" }}>{sus.description}</p>
                       </div>
                       <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.75rem", color: "var(--color-text-secondary)" }}>
                         <span>{sus.initialLocation}</span>

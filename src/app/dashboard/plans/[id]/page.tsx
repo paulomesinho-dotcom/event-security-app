@@ -10,6 +10,7 @@ import dynamic from "next/dynamic";
 const MapViewer = dynamic(() => import("@/components/MapViewer"), { ssr: false });
 import { ArrowLeft, Bell } from "lucide-react";
 import { AbstractLocation } from "@/components/LocationManager";
+import NotificationModal from "@/components/NotificationModal";
 
 interface Locator {
   id: string;
@@ -56,8 +57,42 @@ export default function PlanDetailPage() {
   const [isAddPinMode, setIsAddPinMode] = useState(false);
   const [isDragPinMode, setIsDragPinMode] = useState(false);
 
+  // Shifts for selected pin
+  const [locatorShifts, setLocatorShifts] = useState<any[]>([]);
+  const [locatorUsers, setLocatorUsers] = useState<Record<string, string>>({});
+
   // Custom notification modal
-    
+  const [showNotifModal, setShowNotifModal] = useState(false);
+  const [notifPersonId, setNotifPersonId] = useState("");
+
+  useEffect(() => {
+    if (!selectedLocator || !showLocatorInfoModal) {
+      setLocatorShifts([]);
+      return;
+    }
+    const unsub = onSnapshot(query(collection(db, "shifts"), where("locatorId", "==", selectedLocator.id)), async snap => {
+      const s = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      setLocatorShifts(s);
+      
+      const uMap: Record<string, string> = { ...locatorUsers };
+      for (const shift of s) {
+        if (shift.personId && !uMap[shift.personId]) {
+           const uSnap = await getDoc(doc(db, "users", shift.personId));
+           if (uSnap.exists()) {
+             uMap[shift.personId] = uSnap.data().name;
+           }
+        }
+      }
+      setLocatorUsers(uMap);
+    });
+    return () => unsub();
+  }, [selectedLocator, showLocatorInfoModal]);
+
+  const handleSendNotification = (vigiaId: string) => {
+    setNotifPersonId(vigiaId);
+    setShowNotifModal(true);
+  };
+
   useEffect(() => {
     const fetchPlan = async () => {
       const docRef = doc(db, "plans", planId);
@@ -266,13 +301,45 @@ export default function PlanDetailPage() {
       {/* Modal Locator Info */}
       {showLocatorInfoModal && selectedLocator && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-          <div className="glass" style={{ background: "var(--color-surface)", padding: "2rem", borderRadius: "var(--radius-lg)", width: "100%", maxWidth: "400px" }}>
+          <div className="glass" style={{ background: "var(--color-surface)", padding: "2rem", borderRadius: "var(--radius-lg)", width: "100%", maxWidth: "450px" }}>
             <h3 style={{ margin: 0, marginBottom: "1rem" }}>Pino: {selectedLocator.name}</h3>
-            <p style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)", marginBottom: "2rem" }}>
-              A gestão de turnos é agora feita na <strong>Página de Turnos</strong>.
+            
+            <div style={{ maxHeight: "300px", overflowY: "auto", marginBottom: "1.5rem" }}>
+              <h4 style={{ fontSize: "0.9rem", color: "var(--color-text-secondary)", marginBottom: "0.75rem", marginTop: 0 }}>Turnos Associados:</h4>
+              {locatorShifts.length === 0 ? (
+                <p style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>Não há turnos atribuídos a este pino.</p>
+              ) : (
+                locatorShifts.map(shift => (
+                  <div key={shift.id} style={{ padding: "0.75rem", background: "rgba(255,255,255,0.05)", borderRadius: "var(--radius-md)", marginBottom: "0.5rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                         <p style={{ margin: 0, fontWeight: 600, fontSize: "0.9rem" }}>{shift.name}</p>
+                         <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--color-text-secondary)" }}>{shift.days} | {shift.time}</p>
+                         <p style={{ margin: 0, fontSize: "0.85rem", marginTop: "0.25rem" }}>
+                           Vigia: <strong style={{ color: "var(--color-primary)" }}>{locatorUsers[shift.personId] || "A carregar..."}</strong>
+                         </p>
+                         <p style={{ margin: 0, fontSize: "0.75rem", marginTop: "0.25rem", color: shift.status === "active" ? "#10b981" : "var(--color-text-secondary)" }}>
+                           Estado: {shift.status === "active" ? "Em Curso" : shift.status === "completed" ? "Terminado" : "Pendente"}
+                         </p>
+                      </div>
+                      <button 
+                        onClick={() => handleSendNotification(shift.personId)}
+                        className="btn btn-outline"
+                        style={{ fontSize: "0.75rem", padding: "0.4rem 0.6rem", height: "fit-content" }}
+                      >
+                        Notificar
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <p style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", marginBottom: "1.5rem", textAlign: "center" }}>
+              Para gerir a escala de turnos aceda à <strong>Página de Turnos</strong>.
             </p>
             <div style={{ display: "flex", gap: "1rem" }}>
-               <button type="button" className="btn" onClick={() => setShowLocatorInfoModal(false)} style={{ flex: 1 }}>Fechar</button>
+               <button type="button" className="btn btn-secondary" onClick={() => setShowLocatorInfoModal(false)} style={{ flex: 1 }}>Fechar</button>
                <button 
                  onClick={(e) => { e.preventDefault(); deleteLocator(selectedLocator.id); }}
                  style={{ flex: 1 }}
@@ -285,7 +352,13 @@ export default function PlanDetailPage() {
         </div>
       )}
 
-
+      <NotificationModal
+        isOpen={showNotifModal}
+        onClose={() => setShowNotifModal(false)}
+        selectedPersonId={notifPersonId}
+        usersMap={locatorUsers}
+        allVigiaIds={locatorShifts.map(s => s.personId)}
+      />
     </div>
   );
 }

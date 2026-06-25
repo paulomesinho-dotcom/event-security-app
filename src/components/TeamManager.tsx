@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, updateDoc, addDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, deleteDoc } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWorkplace } from "@/contexts/WorkplaceContext";
-import { UserPlus, Users, ArrowRightLeft, Search, Filter, Trash2, X, User as UserIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { UserPlus, Users, ArrowRightLeft, Search, Filter, Trash2, X, User as UserIcon, ChevronLeft, ChevronRight, Undo2 } from "lucide-react";
 
 interface User {
   id: string;
@@ -129,6 +129,12 @@ export default function TeamManager() {
     setLoanVigiaId("");
     setLoanToWorkplaceId("");
     alert("Vigia cedido com sucesso.");
+  };
+
+  const returnLoan = async (loanId: string) => {
+    if (confirm("Devolver este vigia ao seu local de origem?")) {
+      await deleteDoc(doc(db, "loans", loanId));
+    }
   };
 
   // Filter Logic
@@ -278,7 +284,11 @@ export default function TeamManager() {
                         <span style={{ background: "rgba(168, 85, 247, 0.15)", color: "var(--color-primary)", padding: "0.2rem 0.6rem", borderRadius: "var(--radius-full)", fontSize: "0.75rem", fontWeight: 600 }}>CEDIDO</span>
                       </td>
                       <td style={{ padding: "1rem 1.5rem", textAlign: "right" }}>
-                        <span style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", fontStyle: "italic" }}>Gerido noutro local</span>
+                        <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+                          <button onClick={() => returnLoan(loan.id)} className="btn btn-secondary" style={{ padding: "0.4rem 0.8rem", fontSize: "0.8rem", borderRadius: "var(--radius-full)", background: "transparent", border: "1px solid var(--color-border)", color: "var(--color-primary)", display: "flex", alignItems: "center" }} title="Devolver ao Workplace Original">
+                            <Undo2 size={14} style={{ marginRight: "0.3rem" }} /> Devolver
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

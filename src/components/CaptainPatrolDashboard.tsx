@@ -6,7 +6,7 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc, updateDoc, getDoc, addDoc, orderBy, limit, arrayUnion } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useAuth } from "@/contexts/AuthContext";
-import { MapPin, Play, Square, Clock, Calendar, CheckCircle2, AlertTriangle, X, Bell, FileWarning, MessageCircle, Camera, Image as ImageIcon, Search, Crosshair, UserX, Info, ChevronUp, ChevronDown, Radio, CheckCheck, Check } from "lucide-react";
+import { MapPin, Play, Square, Clock, Calendar, CheckCircle2, AlertTriangle, X, Bell, FileWarning, MessageCircle, Camera, Image as ImageIcon, Search, Crosshair, UserX, Info, ChevronUp, ChevronDown, Radio, CheckCheck, Check, ShieldAlert, Shield, User } from "lucide-react";
 import { requestNotificationPermission, onForegroundMessage } from "@/lib/firebase-messaging";
 
 import dynamic from "next/dynamic";
@@ -170,7 +170,7 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export default function CaptainPatrolDashboard({ onOpenMap, isSidebarOpen }: { onOpenMap?: (locId: string) => void, isSidebarOpen?: boolean }) {
+export default function CaptainPatrolDashboard({ onOpenMap, isSidebarOpen, forcedWorkplaceId }: { onOpenMap?: (locId: string) => void, isSidebarOpen?: boolean, forcedWorkplaceId?: string | null }) {
   const { user } = useAuth();
   const [shifts, setShifts] = useState<Shift[]>([]);
 
@@ -207,14 +207,23 @@ export default function CaptainPatrolDashboard({ onOpenMap, isSidebarOpen }: { o
       const sfts: any[] = [];
       snap.forEach((d) => {
         const s = { id: d.id, ...d.data() } as any;
-        if (user.role === "superadmin" || s.workplaceId === user.workplaceId) {
+        if (user.role === "superadmin" || s.workplaceId === (forcedWorkplaceId || user.workplaceId)) {
           sfts.push(s);
         }
       });
       setTeamShifts(sfts);
     });
     return () => unsub();
-  }, [user]);
+  }, [user, forcedWorkplaceId]);
+
+  const [globalSettings, setGlobalSettings] = useState<any>(null);
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "settings", "global"), snap => {
+      if (snap.exists()) setGlobalSettings(snap.data());
+      else setGlobalSettings(null);
+    });
+    return () => unsub();
+  }, []);
 
   // Derive
   const userIds = new Set(teamShifts.filter((s: any) => s.status === 'active' || s.status === 'pending').map((s: any) => s.vigiaId || s.personId || s.userId).filter(Boolean));
@@ -439,19 +448,62 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
   const activeShift = shifts.find(s => s.status === "active");
   const pendingShift = shifts.find(s => s.status === "pending");
   
-  let activeWorkplace = null;
-  if (activeShift) {
+  let activeWorkplace: any = null;
+  if (forcedWorkplaceId) {
+    activeWorkplace = workplaces.find(w => w.id === forcedWorkplaceId) || null;
+  }
+  if (!activeWorkplace && activeShift) {
     activeWorkplace = workplaces.find(w => w.planIds?.includes(activeShift.planId)) || null;
   }
   if (!activeWorkplace && pendingShift) {
     activeWorkplace = workplaces.find(w => w.planIds?.includes(pendingShift.planId)) || null;
   }
   if (!activeWorkplace && user?.uid) {
-      activeWorkplace = workplaces.find(w => w.captainId === user.uid) || null;
-    }
-    if (!activeWorkplace && user?.workplaceId) {
+    activeWorkplace = workplaces.find(w => w.captainId === user.uid) || null;
+  }
+  if (!activeWorkplace && user?.workplaceId) {
     activeWorkplace = workplaces.find(w => w.id === user.workplaceId) || null;
   }
+
+  // Emergency monitoring calculation
+  const isGlobalEmergency = globalSettings?.globalEmergency === true;
+  const isLocalEmergency = activeWorkplace?.isEmergency === true;
+  const isEmergencyActive = isGlobalEmergency || isLocalEmergency;
+
+  const alertAckSet = new Set([
+    ...(isGlobalEmergency ? (globalSettings?.globalAlertAck || []) : []),
+    ...(isLocalEmergency ? (activeWorkplace?.alertAck || []) : [])
+  ]);
+  const evacAckSet = new Set([
+    ...(isGlobalEmergency ? (globalSettings?.globalEvacAck || []) : []),
+    ...(isLocalEmergency ? (activeWorkplace?.evacAck || []) : [])
+  ]);
+
+  const workplaceGuardsList = Object.values(teamVigias).filter((u: any) => {
+    if (!u || u.role === "superadmin" || u.role === "admin" || u.role === "captain") return false;
+    return u.workplaceId === activeWorkplace?.id || teamShifts.some(s => s.vigiaId === u.id || s.personId === u.id || s.userId === u.id);
+  });
+
+  // Overdue shifts calculation
+  const nowObj = new Date();
+  const nowMinTotal = nowObj.getHours() * 60 + nowObj.getMinutes();
+
+  const overdueShifts = teamShifts.filter(shift => {
+    if (shift.status === "pending") {
+      const startStr = getShiftStartTime(shift);
+      if (!startStr) return false;
+      const [h, m] = startStr.split(":").map(Number);
+      const startMin = h * 60 + m;
+      return startMin > 0 && startMin < nowMinTotal;
+    } else if (shift.status === "active") {
+      const endStr = getShiftEndTime(shift);
+      if (!endStr) return false;
+      const [h, m] = endStr.split(":").map(Number);
+      const endMin = h * 60 + m;
+      return endMin > 0 && endMin < nowMinTotal;
+    }
+    return false;
+  });
 
   useEffect(() => {
     if (activeWorkplace?.captainId) {
@@ -810,6 +862,146 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
+
+        {/* Secção 1: Monitorização de Emergência (quando ativa) */}
+        {isEmergencyActive && (
+          <div style={{ background: "rgba(239, 68, 68, 0.12)", border: "2px solid #ef4444", borderRadius: "var(--radius-lg)", padding: "1.25rem", boxShadow: "0 4px 20px rgba(239,68,68,0.25)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "1rem", borderBottom: "1px solid rgba(239,68,68,0.3)", paddingBottom: "0.75rem" }}>
+              <ShieldAlert size={24} color="#ef4444" style={{ animation: "pulse 2s infinite" }} />
+              <div>
+                <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "#ef4444", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Estado de Emergência ({activeWorkplace?.name || "Local"})
+                </h3>
+                <span style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)", fontWeight: 500 }}>
+                  Confirmações da equipa de patrulha no local
+                </span>
+              </div>
+            </div>
+
+            {workplaceGuardsList.length === 0 ? (
+              <p style={{ fontSize: "0.9rem", color: "var(--color-text-secondary)", margin: 0 }}>Nenhum vigia associado a este local.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                {workplaceGuardsList.map((guard: any) => {
+                  const hasSeenAlert = alertAckSet.has(guard.id);
+                  const hasConfirmedEvac = evacAckSet.has(guard.id);
+
+                  const guardShift = teamShifts.find(s => (s.vigiaId === guard.id || s.personId === guard.id || s.userId === guard.id) && (s.status === "active" || s.status === "pending"));
+                  const locator = guardShift ? locators.find(l => l.id === guardShift.locatorId) : null;
+                  const plan = locator ? activeWorkplace?.plans?.find((p: any) => p.id === locator?.planId) : null;
+                  const hasPin = !!(plan && locator && typeof locator.x === "number" && typeof locator.y === "number");
+
+                  return (
+                    <div key={guard.id} style={{ background: "var(--color-surface)", padding: "0.85rem 1rem", borderRadius: "var(--radius-md)", border: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                        {hasPin ? (
+                          <button
+                            type="button"
+                            onClick={() => setMapModalData({ planImageUrl: plan.imageUrl, pinX: locator.x, pinY: locator.y, title: `${guard.name || guard.email} (${locator.name || "Pin"})` })}
+                            style={{ background: "transparent", border: "none", padding: 0, color: "var(--color-primary)", fontWeight: 700, fontSize: "0.95rem", textDecoration: "underline", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+                            title="Ver posição do pin de localização"
+                          >
+                            <MapPin size={16} color="#ef4444" />
+                            <span>{guard.name || guard.email?.split("@")[0]}</span>
+                          </button>
+                        ) : (
+                          <span style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--color-text-primary)", display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+                            <User size={16} color="var(--color-text-tertiary)" />
+                            <span>{guard.name || guard.email?.split("@")[0]}</span>
+                          </span>
+                        )}
+                        {locator && <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>• {locator.name}</span>}
+                      </div>
+
+                      <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                        <span style={{
+                          fontSize: "0.7rem", fontWeight: 700, padding: "0.25rem 0.6rem", borderRadius: "var(--radius-full)",
+                          background: hasSeenAlert ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                          color: hasSeenAlert ? "#10b981" : "#ef4444",
+                          border: `1px solid ${hasSeenAlert ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.3)"}`,
+                          display: "inline-flex", alignItems: "center", gap: "0.3rem"
+                        }}>
+                          {hasSeenAlert ? <CheckCircle2 size={13} /> : <Clock size={13} />}
+                          {hasSeenAlert ? "ALERTA VISTO" : "ALERTA NÃO VISTO"}
+                        </span>
+
+                        <span style={{
+                          fontSize: "0.7rem", fontWeight: 700, padding: "0.25rem 0.6rem", borderRadius: "var(--radius-full)",
+                          background: hasConfirmedEvac ? "rgba(59, 130, 246, 0.15)" : "rgba(245, 158, 11, 0.15)",
+                          color: hasConfirmedEvac ? "#3b82f6" : "#f59e0b",
+                          border: `1px solid ${hasConfirmedEvac ? "rgba(59,130,246,0.3)" : "rgba(245,158,11,0.3)"}`,
+                          display: "inline-flex", alignItems: "center", gap: "0.3rem"
+                        }}>
+                          {hasConfirmedEvac ? <Shield size={13} /> : <AlertTriangle size={13} />}
+                          {hasConfirmedEvac ? "ZONA EVACUADA / SEGURO" : "ESTADO PENDENTE"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Secção 2: Turnos em Atraso */}
+        {overdueShifts && overdueShifts.length > 0 && (
+          <div style={{ background: "rgba(239, 68, 68, 0.06)", border: "1.5px solid #ef4444", borderRadius: "var(--radius-lg)", padding: "1.25rem" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.75rem", fontWeight: 800, color: "#ef4444", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
+              <AlertTriangle size={15} /> Turnos em Atraso ({overdueShifts.length})
+            </span>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              {overdueShifts.map(shift => {
+                const locator = locators.find(l => l.id === shift.locatorId);
+                const vigia = teamVigias[shift.vigiaId || shift.personId || shift.userId];
+                
+                const isStarting = shift.status === "pending";
+                const timeStr = isStarting ? getShiftStartTime(shift) : getShiftEndTime(shift);
+                let delayMin = 0;
+                if (timeStr) {
+                  const [h, m] = timeStr.split(":").map(Number);
+                  const targetMin = h * 60 + m;
+                  delayMin = Math.max(0, nowMinTotal - targetMin);
+                }
+                
+                const delayFormatted = delayMin >= 60 ? `${Math.floor(delayMin / 60)}h ${delayMin % 60}m` : `${delayMin} min`;
+                const plan = locator ? activeWorkplace?.plans?.find((p: any) => p.id === locator?.planId) : null;
+                const hasPin = !!(plan && locator && typeof locator.x === "number" && typeof locator.y === "number");
+
+                return (
+                  <div key={shift.id} style={{ background: "var(--color-surface)", padding: "1rem", borderRadius: "var(--radius-md)", border: "1px solid rgba(239, 68, 68, 0.3)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem" }}>
+                    <div>
+                      <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                        <span>{vigia?.name || "Vigia Desconhecido"}</span>
+                        <span style={{ fontSize: "0.65rem", background: "#ef4444", color: "white", padding: "0.15rem 0.4rem", borderRadius: "4px", fontWeight: 800 }}>
+                          {isStarting ? "A COMEÇAR EM ATRASO" : "A ACABAR EM ATRASO"}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: "0.85rem", color: "var(--color-text-secondary)", marginTop: "0.35rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <Clock size={14} color="#ef4444" />
+                        <span>Atraso de <strong style={{ color: "#ef4444" }}>{delayFormatted}</strong> (Previsto: {timeStr})</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      {hasPin ? (
+                        <button
+                          type="button"
+                          onClick={() => setMapModalData({ planImageUrl: plan.imageUrl, pinX: locator.x, pinY: locator.y, title: `${vigia?.name || "Vigia"} - ${locator.name}` })}
+                          style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.4)", padding: "0.5rem 0.85rem", borderRadius: "var(--radius-md)", fontWeight: 700, fontSize: "0.8rem", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                        >
+                          <MapPin size={14} /> Ver no Mapa
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: "0.8rem", color: "var(--color-text-tertiary)" }}>{locator?.name || "Sem planta"}</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
       {activeWorkplace?.plans && activeWorkplace.plans.length > 0 && (
         <div style={{ marginBottom: "1.5rem" }}>

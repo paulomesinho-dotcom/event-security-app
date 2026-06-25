@@ -141,30 +141,28 @@ export default function EmergencyBanner() {
   let isMissingPersonBlock = false;
   let missingPersonData: any = null;
 
-  if (hasActiveShift) {
-    if (isEvacuation && globalEmergency && globalAlertType === "evacuation" && !globalAlertAck.includes(user.uid)) {
-      needsToAcknowledge = true;
-      hasEvacuated = globalEvacAck.includes(user.uid);
-      activeEmergencyId = "global";
-    } else if (isEvacuation && myLocalEmergency && !(myLocalEmergency.alertAck || []).includes(user.uid)) {
-      needsToAcknowledge = true;
-      hasEvacuated = (myLocalEmergency.evacAck || []).includes(user.uid);
-      activeEmergencyId = myLocalEmergency.id;
-    } else if (currentMissing) {
-      needsToAcknowledge = true;
-      isMissingPersonBlock = true;
-      missingPersonData = currentMissing;
-      activeEmergencyId = currentMissing.id;
-    } else if (isEvacuation) {
-      hasEvacuated = globalEmergency ? globalEvacAck.includes(user.uid) : (myLocalEmergency?.evacAck || []).includes(user.uid);
-      activeEmergencyId = globalEmergency ? "global" : myLocalEmergency?.id || "";
-    }
+  if (isEvacuation && globalEmergency && globalAlertType === "evacuation" && !globalAlertAck.includes(user.uid)) {
+    needsToAcknowledge = true;
+    hasEvacuated = globalEvacAck.includes(user.uid);
+    activeEmergencyId = "global";
+  } else if (isEvacuation && myLocalEmergency && !(myLocalEmergency.alertAck || []).includes(user.uid)) {
+    needsToAcknowledge = true;
+    hasEvacuated = (myLocalEmergency.evacAck || []).includes(user.uid);
+    activeEmergencyId = myLocalEmergency.id;
+  } else if (currentMissing) {
+    needsToAcknowledge = true;
+    isMissingPersonBlock = true;
+    missingPersonData = currentMissing;
+    activeEmergencyId = currentMissing.id;
+  } else if (isEvacuation) {
+    hasEvacuated = globalEmergency ? globalEvacAck.includes(user.uid) : (myLocalEmergency?.evacAck || []).includes(user.uid);
+    activeEmergencyId = globalEmergency ? "global" : myLocalEmergency?.id || "";
   }
 
-  const isBlockingEmergency = hasActiveShift && needsToAcknowledge;
+  const isBlockingEmergency = needsToAcknowledge;
   const visibleSuspects = activeSuspects.filter(s => !dismissedSuspects.includes(s.id));
-  const hasActiveBanners = hasActiveShift && !needsToAcknowledge && (isEvacuation || ackedMissing.length > 0 || visibleSuspects.length > 0);
-  const hasNonBlockingNotifications = !hasActiveShift && (globalEmergency || localEmergencies.length > 0 || activeMissingPersons.length > 0 || visibleSuspects.length > 0);
+  const hasActiveBanners = !needsToAcknowledge && (isEvacuation || ackedMissing.length > 0 || visibleSuspects.length > 0);
+  const hasNonBlockingNotifications = !hasActiveBanners && !isBlockingEmergency && (globalEmergency || localEmergencies.length > 0 || activeMissingPersons.length > 0 || visibleSuspects.length > 0);
 
   if (!isBlockingEmergency && !hasActiveBanners && !hasNonBlockingNotifications && !showMissingDetails && !showIncidentModal && !showSuspectDetails && visibleSuspects.length === 0) return null;
 
@@ -253,7 +251,7 @@ export default function EmergencyBanner() {
             </div>
           </div>
         ))}
-        {user.role !== "vigia" && visibleSuspects.length > 0 && !hasActiveShift && (
+        {visibleSuspects.length > 0 && !hasActiveShift && (
            <div style={{ background: "linear-gradient(135deg, #7c3aed, #a855f7)", color: "white", padding: "1rem", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-lg)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", animation: "slideDown 0.3s ease-out" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
               <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: "50%", padding: "0.5rem" }}>
@@ -318,7 +316,7 @@ export default function EmergencyBanner() {
                 {missingPersonData.photoUrl && (
                    <img src={missingPersonData.photoUrl} alt="Desaparecido" style={{ width: "100%", maxHeight: "250px", objectFit: "contain", borderRadius: "var(--radius-md)", marginBottom: "1rem", background: "white" }} />
                 )}
-                <p style={{ fontSize: "1rem", fontWeight: 500, margin: 0, textAlign: "left", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "var(--color-text-primary)" }}>
+                <p style={{ fontSize: "1rem", fontWeight: 500, margin: 0, textAlign: "left", whiteSpace: "pre-wrap", wordBreak: "normal", overflowWrap: "anywhere", color: "var(--color-text-primary)" }}>
                   {missingPersonData.description}
                 </p>
               </div>
@@ -405,8 +403,8 @@ export default function EmergencyBanner() {
         </div>
       )}
 
-      {/* Suspect Banner for Captains/Admins (non-blocking) */}
-      {visibleSuspects.length > 0 && user?.role !== "vigia" && (
+      {/* Suspect Banner (non-blocking) */}
+      {visibleSuspects.length > 0 && (
         <div style={{
           width: "100%", background: "linear-gradient(135deg, #7c3aed, #a855f7)", color: "white", padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem", zIndex: 9988, position: "relative", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)"
         }}>
@@ -508,7 +506,7 @@ export default function EmergencyBanner() {
                     {m.photoUrl && (
                       <img src={m.photoUrl} alt="Desaparecido" style={{ width: "100%", maxHeight: "200px", objectFit: "contain", borderRadius: "var(--radius-md)", marginBottom: "1rem", background: "white" }} />
                     )}
-                    <p style={{ margin: 0, fontSize: "0.95rem", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "var(--color-text-primary)" }}>{m.description}</p>
+                    <p style={{ margin: 0, fontSize: "0.95rem", whiteSpace: "pre-wrap", wordBreak: "normal", overflowWrap: "anywhere", color: "var(--color-text-primary)" }}>{m.description}</p>
                   </div>
                 ))}
               </div>
@@ -517,7 +515,7 @@ export default function EmergencyBanner() {
                 {showMissingDetails.photoUrl && (
                   <img src={showMissingDetails.photoUrl} alt="Desaparecido" style={{ width: "100%", maxHeight: "250px", objectFit: "contain", borderRadius: "var(--radius-md)", marginBottom: "1rem", background: "white" }} />
                 )}
-                <p style={{ margin: 0, fontSize: "1rem", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "var(--color-text-primary)" }}>{showMissingDetails.description}</p>
+                <p style={{ margin: 0, fontSize: "1rem", whiteSpace: "pre-wrap", wordBreak: "normal", overflowWrap: "anywhere", color: "var(--color-text-primary)" }}>{showMissingDetails.description}</p>
               </div>
             )}
           </div>
@@ -542,7 +540,7 @@ export default function EmergencyBanner() {
                     {m.photoUrl && (
                       <img src={m.photoUrl} alt="Suspeito" style={{ width: "100%", maxHeight: "200px", objectFit: "cover", borderRadius: "var(--radius-md)", marginBottom: "1rem" }} />
                     )}
-                    <p style={{ margin: 0, fontSize: "0.95rem", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "var(--color-text-primary)", fontWeight: 500 }}>{m.description}</p>
+                    <p style={{ margin: 0, fontSize: "0.95rem", whiteSpace: "pre-wrap", wordBreak: "normal", overflowWrap: "anywhere", color: "var(--color-text-primary)", fontWeight: 500 }}>{m.description}</p>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "1rem", fontSize: "0.85rem" }}>
                       <div><strong style={{ color: "var(--color-text-secondary)" }}>Visto em:</strong><br/>{m.initialLocation} <a href={`https://maps.google.com/?q=${m.lat && m.lng ? `${m.lat},${m.lng}` : encodeURIComponent('Porto ' + m.initialLocation)}`} target="_blank" rel="noreferrer" style={{ color: "#a855f7", textDecoration: "underline", marginLeft: "4px" }}>(Ver no Mapa)</a></div>
                       <div><strong style={{ color: "var(--color-text-secondary)" }}>Direção:</strong><br/>{m.direction || "Desconhecida"}</div>
@@ -555,7 +553,7 @@ export default function EmergencyBanner() {
                 {showSuspectDetails.photoUrl && (
                   <img src={showSuspectDetails.photoUrl} alt="Suspeito" style={{ width: "100%", maxHeight: "250px", objectFit: "cover", borderRadius: "var(--radius-md)", marginBottom: "1rem" }} />
                 )}
-                <p style={{ margin: 0, fontSize: "1rem", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "var(--color-text-primary)", fontWeight: 500 }}>{showSuspectDetails.description}</p>
+                <p style={{ margin: 0, fontSize: "1rem", whiteSpace: "pre-wrap", wordBreak: "normal", overflowWrap: "anywhere", color: "var(--color-text-primary)", fontWeight: 500 }}>{showSuspectDetails.description}</p>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "1rem", fontSize: "0.85rem" }}>
                   <div><strong style={{ color: "var(--color-text-secondary)" }}>Visto em:</strong><br/>{showSuspectDetails.initialLocation} {showSuspectDetails.lat && showSuspectDetails.lng && <a href={`https://maps.google.com/?q=${showSuspectDetails.lat},${showSuspectDetails.lng}`} target="_blank" rel="noreferrer" style={{ color: "#a855f7", textDecoration: "underline", marginLeft: "4px" }}>(Ver no Mapa)</a>}</div>
                   <div><strong style={{ color: "var(--color-text-secondary)" }}>Direção:</strong><br/>{showSuspectDetails.direction || "Desconhecida"}</div>

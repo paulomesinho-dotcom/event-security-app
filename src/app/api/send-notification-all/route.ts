@@ -12,6 +12,14 @@ export async function POST(req: NextRequest) {
     const adminDb = getAdminFirestore();
     const usersSnapshot = await adminDb.collection("users").get();
     
+    // Find vigias with active/pending shifts
+    const shiftsSnapshot = await adminDb.collection("shifts").where("status", "in", ["active", "pending"]).get();
+    const vigiasWithShifts = new Set<string>();
+    shiftsSnapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.personId) vigiasWithShifts.add(data.personId);
+    });
+    
     const tokens: string[] = [];
     const targetUids: string[] = [];
     
@@ -25,8 +33,15 @@ export async function POST(req: NextRequest) {
         }
       } else {
         // target === "all"
-        targetUids.push(doc.id);
-        if (data.fcmToken) tokens.push(data.fcmToken);
+        if (data.role === "vigia") {
+          if (data.workplaceId || vigiasWithShifts.has(doc.id)) {
+            targetUids.push(doc.id);
+            if (data.fcmToken) tokens.push(data.fcmToken);
+          }
+        } else {
+          targetUids.push(doc.id);
+          if (data.fcmToken) tokens.push(data.fcmToken);
+        }
       }
     });
 

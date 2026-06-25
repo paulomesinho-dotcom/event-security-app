@@ -100,10 +100,10 @@ export default function IncidentManager() {
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "0.25rem" }}>
-                      <span style={{ fontWeight: 600, fontSize: "0.95rem", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{inc.locatorName}</span>
+                      <span style={{ fontWeight: 600, fontSize: "0.95rem", whiteSpace: "pre-wrap", wordBreak: "normal", overflowWrap: "anywhere" }}>{inc.locatorName}</span>
                       <span style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "0.25rem" }}><Clock size={12} /> {new Date(inc.createdAt).toLocaleString("pt-PT")}</span>
                     </div>
-                    <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-text-secondary)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                    <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-text-secondary)", whiteSpace: "pre-wrap", wordBreak: "normal", overflowWrap: "anywhere" }}>
                       <User size={12} style={{ display: "inline", marginRight: "0.25rem" }} /> {inc.vigiaName} — {inc.message}
                     </p>
                   </div>
@@ -128,7 +128,7 @@ export default function IncidentManager() {
 
                   <div style={{ marginTop: "1.5rem" }}>
                     <span style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: "0.5rem", textTransform: "uppercase" }}>Mensagem</span>
-                    <p style={{ margin: 0, fontSize: "1rem", lineHeight: 1.5, color: "var(--color-text-primary)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                    <p style={{ margin: 0, fontSize: "1rem", lineHeight: 1.5, color: "var(--color-text-primary)", whiteSpace: "pre-wrap", wordBreak: "normal", overflowWrap: "anywhere" }}>
                       {inc.message}
                     </p>
                   </div>

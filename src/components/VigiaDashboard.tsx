@@ -202,6 +202,18 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+const formatZelloLink = (link: string | undefined) => {
+  if (!link) return "#";
+  link = link.trim();
+  if (link.startsWith("http://") || link.startsWith("https://")) return link;
+  
+  let formatted = link.startsWith("zello://") ? link : `zello://${link}`;
+  if (!formatted.includes("?add_channel")) {
+    formatted += "?add_channel";
+  }
+  return formatted;
+};
+
 export default function VigiaDashboard() {
   const { user } = useAuth();
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -707,7 +719,7 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
         <div style={{ marginBottom: "1rem", display: "flex", gap: "0.75rem", alignItems: "flex-start", padding: "0.9rem 1rem", background: "linear-gradient(135deg, #1e1b4b, #312e81)", borderRadius: "var(--radius-lg)", color: "white", boxShadow: "0 4px 20px rgba(99,102,241,0.4)", animation: "slideDown 0.3s ease" }}>
           <Bell size={18} style={{ flexShrink: 0, marginTop: "0.1rem", color: "#a5b4fc" }} />
           <div style={{ flex: 1, minWidth: 0}}>
-            <p style={{ margin: 0, fontWeight: 700, fontSize: "0.7rem", color: "#a5b4fc", marginBottom: "0.2rem", letterSpacing: "0.05em" }}>🔔 NOTIFICAÇíO DO CAPITíO</p>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: "0.7rem", color: "#a5b4fc", marginBottom: "0.2rem", letterSpacing: "0.05em" }}>🔔 NOTIFICAÇÃO DO CAPITÃO</p>
             <p style={{ margin: 0, fontSize: "0.9rem" }}>{fcmBanner}</p>
           </div>
           <button onClick={() => setFcmBanner(null)} style={{ background: "rgba(255,255,255,0.1)", border: "none", cursor: "pointer", borderRadius: "50%", padding: "0.3rem", color: "white", display: "flex", alignItems: "center", flexShrink: 0 }}>
@@ -750,10 +762,10 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
               <Bell size={18} style={{ flexShrink: 0, marginTop: "0.1rem", color: "#a5b4fc" }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.2rem" }}>
-                  <p style={{ margin: 0, fontWeight: 700, fontSize: "0.7rem", color: "#a5b4fc", letterSpacing: "0.05em" }}>MENSAGEM DO CAPITíO</p>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: "0.7rem", color: "#a5b4fc", letterSpacing: "0.05em" }}>MENSAGEM DO CAPITÃO</p>
                   {timeStr && <span style={{ fontSize: "0.65rem", color: "rgba(165,180,252,0.8)" }}>{timeStr}</span>}
                 </div>
-                <p style={{ margin: 0, fontSize: "0.9rem", wordBreak: "break-word" }}>{n.message}</p>
+                <p style={{ margin: 0, fontSize: "0.9rem", wordBreak: "normal", overflowWrap: "anywhere" }}>{n.message}</p>
               </div>
               <button onClick={() => dismissNotification(n.id)} style={{ background: "rgba(255,255,255,0.1)", border: "none", cursor: "pointer", borderRadius: "50%", padding: "0.3rem", color: "white", display: "flex", alignItems: "center", flexShrink: 0 }}>
                 <X size={15} />
@@ -801,68 +813,59 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
                 <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#10b981", animation: "pulse 2s infinite" }} />
                 <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--color-text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Turno em Curso</span>
               </div>
-              <div style={{ background: "linear-gradient(135deg, #151F31 0%, #1e3a5f 100%)", borderRadius: "var(--radius-lg)", padding: "1.25rem", color: "white", boxShadow: "0 8px 32px rgba(21,31,49,0.35)", position: "relative", overflow: "hidden" }}>
-                <div style={{ position: "absolute", top: "-20px", right: "-20px", width: "120px", height: "120px", borderRadius: "50%", background: "rgba(255,255,255,0.04)", pointerEvents: "none" }} />
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.75rem", marginBottom: "1rem" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", flex: 1, minWidth: 0 }}>
-                    <div style={{ background: "rgba(16,185,129,0.2)", padding: "0.55rem", borderRadius: "50%", flexShrink: 0 }}>
-                      <MapPin size={20} color="#34d399" />
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <p style={{ margin: 0, fontSize: "0.65rem", color: "rgba(255,255,255,0.45)", fontWeight: 600, letterSpacing: "0.05em" }}>
-                        {activeWorkplace ? `${activeWorkplace.name.toUpperCase()} - ` : ""}POSIÇíO ATUAL
-                      </p>
-                      {activeShiftLocation ? (
-                        <>
-                          <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {activeShiftLocation.local || activeShift.locatorName}
-                          </h3>
-                          {(activeShiftLocation.sublocal || activeShiftLocation.subsublocal) && (
-                            <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.85rem", color: "rgba(255,255,255,0.7)", fontWeight: 600 }}>
-                              {[activeShiftLocation.sublocal, activeShiftLocation.subsublocal].filter(Boolean).join(" - ")}
-                            </p>
+              <div style={{ background: "linear-gradient(135deg, #151F31 0%, #1e3a5f 100%)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "0 8px 32px rgba(21,31,49,0.35)", color: "white" }}>
+                <div style={{ height: "3px", background: "#10b981" }} />
+                <div style={{ padding: "1rem 1.1rem", position: "relative" }}>
+                  <div style={{ position: "absolute", top: "-20px", right: "-20px", width: "120px", height: "120px", borderRadius: "50%", background: "rgba(255,255,255,0.04)", pointerEvents: "none" }} />
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.6rem", position: "relative" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+                      <MapPin size={16} color="#34d399" style={{ flexShrink: 0 }} />
+                      <div>
+                        <div style={{ marginBottom: "0.2rem" }}>
+                          {activeWorkplace && (
+                            <span style={{ fontSize: "0.65rem", fontWeight: 700, color: "#34d399", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                              {activeWorkplace.name}
+                            </span>
                           )}
-                        </>
-                      ) : (
-                        <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{activeShift.locatorName}</h3>
-                      )}
+                        </div>
+                        <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700 }}>
+                          {activeShiftLocation?.local || activeShift.locatorName}
+                        </h4>
+                        {(activeShiftLocation?.sublocal || activeShiftLocation?.subsublocal) && (
+                          <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.75rem", color: "rgba(255,255,255,0.7)" }}>
+                            {[activeShiftLocation.sublocal, activeShiftLocation.subsublocal].filter(Boolean).join(" - ")}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ background: "rgba(16,185,129,0.2)", color: "#34d399", fontSize: "0.65rem", fontWeight: 700, padding: "0.25rem 0.5rem", borderRadius: "100px", display: "flex", alignItems: "center", gap: "0.3rem", flexShrink: 0 }}>
+                      <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#34d399", animation: "pulse 2s infinite" }} /> ATIVO
                     </div>
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", flexShrink: 0 }}>
-                    <button onClick={() => viewMap(activeShift)} style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 0.8rem", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "var(--radius-md)", color: "white", cursor: "pointer", fontSize: "0.8rem", fontWeight: 600, whiteSpace: "nowrap" }}>
+
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.5rem", background: "rgba(255,255,255,0.1)", padding: "0.3rem 0.7rem", borderRadius: "var(--radius-md)", position: "relative" }}>
+                    <Clock size={13} color="rgba(255,255,255,0.9)" />
+                    <span style={{ fontSize: "0.88rem", fontWeight: 700, color: "rgba(255,255,255,0.9)" }}>Iniciado: {new Date(activeShift.startTime).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}</span>
+                  </div>
+
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem 0.9rem", marginBottom: "0.75rem", position: "relative" }}>
+                    {activeShift.name && <span style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.7)" }}>{activeShift.name}</span>}
+                    {activeShift.days && <span style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.7)", display: "flex", alignItems: "center", gap: "0.2rem" }}><Calendar size={11} />{activeShift.days}</span>}
+                    {activeShift.time && <span style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.7)", display: "flex", alignItems: "center", gap: "0.2rem" }}><Clock size={11} />{activeShift.time}</span>}
+                  </div>
+
+                  <div style={{ display: "flex", gap: "0.5rem", position: "relative" }}>
+                    <button onClick={() => viewMap(activeShift)} style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35rem", fontSize: "0.82rem", padding: "0.5rem", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "var(--radius-md)", color: "white", cursor: "pointer", fontWeight: 600 }}>
                       <MapPin size={14} /> Planta
                     </button>
-                    <button onClick={() => updateShiftStatus(activeShift, "completed")} style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 0.8rem", background: "#ef4444", border: "none", borderRadius: "var(--radius-md)", color: "white", cursor: "pointer", fontSize: "0.8rem", fontWeight: 700, boxShadow: "0 4px 12px rgba(239,68,68,0.35)", whiteSpace: "nowrap" }}>
-                      <Square size={14} fill="currentColor" /> Terminar
+                    <button onClick={() => updateShiftStatus(activeShift, "completed")} style={{ flex: 2, padding: "0.6rem", fontSize: "0.85rem", fontWeight: 700, border: "none", borderRadius: "var(--radius-md)", cursor: "pointer", background: "#ef4444", color: "white", boxShadow: "0 4px 12px rgba(239,68,68,0.35)", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35rem" }}>
+                      <Square size={14} fill="currentColor" /> Terminar Turno
                     </button>
-                  </div>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                  {activeShift.name && (
-                    <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "var(--radius-md)", padding: "0.6rem 0.75rem" }}>
-                      <p style={{ margin: 0, fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.15rem", fontWeight: 600 }}>DESIGNAÇíO</p>
-                      <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 600 }}>{activeShift.name}</p>
-                    </div>
-                  )}
-                  {activeShift.time && (
-                    <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "var(--radius-md)", padding: "0.6rem 0.75rem" }}>
-                      <p style={{ margin: 0, fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.15rem", fontWeight: 600 }}>HORÁRIO</p>
-                      <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 600 }}>{activeShift.time}</p>
-                    </div>
-                  )}
-                  {activeShift.days && (
-                    <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "var(--radius-md)", padding: "0.6rem 0.75rem" }}>
-                      <p style={{ margin: 0, fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.15rem", fontWeight: 600 }}>DATA</p>
-                      <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 600 }}>{activeShift.days}</p>
-                    </div>
-                  )}
-                  <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "var(--radius-md)", padding: "0.6rem 0.75rem" }}>
-                    <p style={{ margin: 0, fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.15rem", fontWeight: 600 }}>INICIADO</p>
-                    <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 600 }}>{new Date(activeShift.startTime).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}</p>
                   </div>
                 </div>
               </div>
-            </section>
+            
+              </section>
           )}
 
           {pendingShifts.length > 0 && (
@@ -1011,7 +1014,7 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
                      
                      {expandedIncidentId === inc.id && (
                        <div style={{ padding: "0 1rem 1rem 1rem", borderTop: "1px solid var(--color-border)", paddingTop: "1rem" }}>
-                         <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", color: "var(--color-text-primary)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                         <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", color: "var(--color-text-primary)", whiteSpace: "pre-wrap", wordBreak: "normal", overflowWrap: "anywhere" }}>
                            {inc.message}
                          </p>
                          {inc.photoUrl && (
@@ -1153,7 +1156,7 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
                <div style={{ textAlign: "center", padding: "2rem", color: "var(--color-text-secondary)" }}>Ainda não reportou nenhuma ocorrência.</div>
             ) : (
                allIncidents.map(inc => (
-                 <div key={inc.id} style={{ background: "var(--color-surface)", borderRadius: "var(--radius-md)", padding: "1rem", border: "1px solid var(--color-border)" }}>
+                 <div key={inc.id} style={{ flexShrink: 0, background: "var(--color-surface)", borderRadius: "var(--radius-md)", padding: "1rem", border: "1px solid var(--color-border)" }}>
                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: inc.status === "open" ? "#ef4444" : "#10b981", background: inc.status === "open" ? "rgba(239,68,68,0.1)" : "rgba(16,185,129,0.1)", padding: "0.15rem 0.5rem", borderRadius: "999px" }}>
                        {inc.status === "open" ? "ABERTO" : "RESOLVIDO"}
@@ -1315,7 +1318,7 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
                 {selectedSuspect.photoUrl && (
                   <img src={selectedSuspect.photoUrl} alt="Suspeito" style={{ width: "100%", maxHeight: "300px", objectFit: "cover", borderRadius: "var(--radius-md)", marginBottom: "1rem" }} />
                 )}
-                <p style={{ margin: 0, fontSize: "1.05rem", fontWeight: 500, color: "var(--color-text-primary)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                <p style={{ margin: 0, fontSize: "1.05rem", fontWeight: 500, color: "var(--color-text-primary)", whiteSpace: "pre-wrap", wordBreak: "normal", overflowWrap: "anywhere" }}>
                   {selectedSuspect.description}
                 </p>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginTop: "1.25rem", paddingTop: "1rem", borderTop: "1px dashed rgba(168,85,247,0.3)", fontSize: "0.85rem" }}>
@@ -1358,7 +1361,7 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
                           {upd.photoUrl && (
                             <img src={upd.photoUrl} alt="Atualização" style={{ width: "100%", maxHeight: "150px", objectFit: "cover", borderRadius: "var(--radius-sm)", marginBottom: "0.5rem" }} />
                           )}
-                          {upd.message && <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--color-text-secondary)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{upd.message}</p>}
+                          {upd.message && <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--color-text-secondary)", whiteSpace: "pre-wrap", wordBreak: "normal", overflowWrap: "anywhere" }}>{upd.message}</p>}
                           <div style={{ marginTop: "0.5rem" }}>
                             
                           {(selectedSuspect?.planImageUrl) && (
@@ -1432,50 +1435,7 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
                        {activeWorkplace.name} <span style={{ color: "var(--color-text-tertiary)", margin: "0 0.5rem" }}>|</span> Capitão: {captainName || "..."}
                     </div>
                  </div>
-                 <button 
-                    onClick={async () => {
-                      if (!activeWorkplace?.captainId) return;
-                      const msg = prompt("Que mensagem deseja enviar ao capitão?");
-                      if (!msg) return;
-
-                      setIsSendingNotify(true);
-                      try {
-                        const res = await fetch("/api/send-notification", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            vigiaId: activeWorkplace.captainId,
-                            title: `Mensagem de ${user?.name || "Vigia"} (${activeWorkplace.name})`,
-                            message: msg
-                          })
-                        });
-                        const data = await res.json();
-                        if (res.ok && !data.error) {
-                          alert("Notificação enviada com sucesso!");
-                        } else if (data.code === "NO_FCM_TOKEN") {
-                           alert("Mensagem registada, mas o capitão não tem notificações ativas no dispositivo.");
-                        } else {
-                           alert(data.error || "Erro ao enviar notificação.");
-                        }
-                      } catch (err) {
-                        console.error(err);
-                        alert("Erro ao contactar servidor.");
-                      } finally {
-                        setIsSendingNotify(false);
-                      }
-                    }}
-                    disabled={isSendingNotify || !activeWorkplace.captainId}
-                    style={{
-                       background: "var(--color-surface)", border: "1px solid var(--color-border)",
-                       padding: "0.5rem 1rem", borderRadius: "var(--radius-full)", fontSize: "0.8rem",
-                       color: "#38bdf8", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.5rem",
-                       cursor: (isSendingNotify || !activeWorkplace.captainId) ? "not-allowed" : "pointer",
-                       opacity: (isSendingNotify || !activeWorkplace.captainId) ? 0.6 : 1
-                    }}
-                 >
-                    <Bell size={14} />
-                    {isSendingNotify ? "A enviar..." : "Notificar Capitão"}
-                 </button>
+                 
               </div>
             )}
 
@@ -1483,7 +1443,7 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
               <p style={{ textAlign: "center", color: "var(--color-text-secondary)", marginTop: "2rem" }}>Nenhuma informação publicada.</p>
             ) : (
               Object.entries(groupedInfoItems).map(([topic, topicItems]) => (
-                <div key={topic} style={{ background: "var(--color-surface)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", overflow: "hidden" }}>
+                <div key={topic} style={{ flexShrink: 0, background: "var(--color-surface)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", overflow: "hidden" }}>
                   <button 
                     onClick={() => setExpandedInfoTopics(prev => ({ ...prev, [topic]: !prev[topic] }))}
                     style={{ width: "100%", padding: "1rem", display: "flex", justifyContent: "space-between", alignItems: "center", background: "transparent", border: "none", cursor: "pointer", color: "var(--color-primary)", fontWeight: 600, fontSize: "1rem" }}
@@ -1545,7 +1505,7 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
             <h4 style={{ margin: "0 0 0.5rem", color: "var(--color-text-secondary)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Canais Zello</h4>
 
             {activeWorkplace?.zelloChannelLink ? (
-              <a href={activeWorkplace.zelloChannelLink} style={{ padding: "1.2rem", background: "var(--color-surface)", border: "1px solid rgba(249,115,22,0.3)", borderRadius: "var(--radius-lg)", fontWeight: 700, color: "var(--color-text-primary)", textDecoration: "none", display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "1rem" }}>
+              <a href={formatZelloLink(activeWorkplace.zelloChannelLink)} style={{ padding: "1.2rem", background: "var(--color-surface)", border: "1px solid rgba(249,115,22,0.3)", borderRadius: "var(--radius-lg)", fontWeight: 700, color: "var(--color-text-primary)", textDecoration: "none", display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "1rem" }}>
                 <div style={{ width: "40px", height: "40px", borderRadius: "50%", background: "rgba(249,115,22,0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "#f97316" }}><Radio size={20} /></div>
                 Rádio Vigias
               </a>
