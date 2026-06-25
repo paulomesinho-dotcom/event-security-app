@@ -278,6 +278,7 @@ export default function CaptainPatrolDashboard({ onOpenMap, isSidebarOpen, force
   const [sendingGlobalAlert, setSendingGlobalAlert] = useState(false);
 
   // Comunicações reestruturadas
+  const [allPlans, setAllPlans] = useState<any[]>([]);
   const [showTeamNotifyModal, setShowTeamNotifyModal] = useState(false);
   const [teamNotifyText, setTeamNotifyText] = useState("");
   const [sendingTeamNotify, setSendingTeamNotify] = useState(false);
@@ -397,6 +398,10 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
       setTimeout(() => setFcmBanner(null), 8000);
     });
 
+    const unsubPlans = onSnapshot(collection(db, "plans"), (snap) => {
+      setAllPlans(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
     const unsubWorkplaces = onSnapshot(collection(db, "workplaces"), (snap) => {
       setWorkplaces(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
@@ -425,7 +430,7 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
 
     return () => { unsubGlobalNotifs();
         unsubShifts();
-        unsubNotifs(); unsubFcm(); unsubWorkplaces(); unsubIncidents(); unsubSuspects(); };
+        unsubPlans(); unsubNotifs(); unsubFcm(); unsubWorkplaces(); unsubIncidents(); unsubSuspects(); };
   }, [user]);
 
   useEffect(() => {
@@ -487,6 +492,10 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
   if (!activeWorkplace && user?.workplaceId) {
     activeWorkplace = workplaces.find(w => w.id === user.workplaceId) || null;
   }
+
+  const workplacePlans = (activeWorkplace?.planIds && activeWorkplace.planIds.length > 0)
+    ? allPlans.filter(p => activeWorkplace.planIds.includes(p.id))
+    : allPlans;
 
   // Emergency monitoring calculation
   const isGlobalEmergency = globalSettings?.globalEmergency === true;
@@ -1836,8 +1845,8 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
 
                   <button 
                     onClick={() => {
-                      if (activeWorkplace?.plans?.length === 1) {
-                        setSelectedCommsPlan(activeWorkplace.plans[0]);
+                      if (workplacePlans.length === 1) {
+                        setSelectedCommsPlan(workplacePlans[0]);
                       } else {
                         setSelectedCommsPlan(null);
                       }
@@ -1996,8 +2005,8 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
       </div>
 
       {/* MODAL NOTIFICAR EQUIPA */}
-      {showTeamNotifyModal && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--color-bg)", zIndex: 10001, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      {activePanel === 'zello' && showTeamNotifyModal && (
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: "calc(76px + env(safe-area-inset-bottom))", background: "var(--color-bg)", zIndex: 9500, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={{ background: "linear-gradient(135deg, #1e0a3c, #5b1030)", padding: "1.25rem 1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
               <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "rgba(255,255,255,0.2)", border: "1px solid rgba(255,255,255,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -2011,63 +2020,65 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
             <button onClick={() => setShowTeamNotifyModal(false)} style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "white", cursor: "pointer", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={18} /></button>
           </div>
           
-          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-              <label style={{ fontWeight: 600, color: "var(--color-text-secondary)", fontSize: "0.85rem" }}>Escrever Mensagem</label>
-              <textarea 
-                className="input" 
-                rows={4} 
-                value={teamNotifyText} 
-                onChange={e => setTeamNotifyText(e.target.value)}
-                placeholder="Escreva a mensagem ou instrução para a equipa..."
-                style={{ resize: "vertical" }}
-              />
-              <button 
-                onClick={sendTeamNotification} 
-                disabled={sendingTeamNotify || !teamNotifyText}
-                style={{
-                  width: "100%", padding: "1rem", background: "var(--color-primary)", color: "white",
-                  border: "none", borderRadius: "var(--radius-md)", fontWeight: 700, fontSize: "1rem",
-                  cursor: (sendingTeamNotify || !teamNotifyText) ? "not-allowed" : "pointer",
-                  opacity: (sendingTeamNotify || !teamNotifyText) ? 0.6 : 1,
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem"
-                }}
-              >
-                {sendingTeamNotify ? "A ENVIAR..." : "ENVIAR PARA A EQUIPA"}
-              </button>
-            </div>
+          <div style={{ padding: "1.25rem 1.5rem", display: "flex", flexDirection: "column", gap: "0.75rem", flexShrink: 0, borderBottom: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+            <label style={{ fontWeight: 600, color: "var(--color-text-secondary)", fontSize: "0.85rem" }}>Escrever Mensagem</label>
+            <textarea 
+              className="input" 
+              rows={3} 
+              value={teamNotifyText} 
+              onChange={e => setTeamNotifyText(e.target.value)}
+              placeholder="Escreva a mensagem ou instrução para a equipa..."
+              style={{ resize: "vertical" }}
+            />
+            <button 
+              onClick={sendTeamNotification} 
+              disabled={sendingTeamNotify || !teamNotifyText}
+              style={{
+                width: "100%", padding: "0.875rem", background: "var(--color-primary)", color: "white",
+                border: "none", borderRadius: "var(--radius-md)", fontWeight: 700, fontSize: "0.95rem",
+                cursor: (sendingTeamNotify || !teamNotifyText) ? "not-allowed" : "pointer",
+                opacity: (sendingTeamNotify || !teamNotifyText) ? 0.6 : 1,
+                display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem"
+              }}
+            >
+              {sendingTeamNotify ? "A ENVIAR..." : "ENVIAR PARA A EQUIPA"}
+            </button>
+          </div>
 
-            {globalNotifications.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                <h4 style={{ margin: 0, color: "var(--color-text-secondary)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Últimas Mensagens Enviadas</h4>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                  {globalNotifications.map((notif: any) => (
-                    <div 
-                      key={notif.id}
-                      style={{ 
-                        padding: "1rem", background: "var(--color-surface)", border: "1px solid var(--color-border)",
-                        borderRadius: "var(--radius-md)", display: "flex", flexDirection: "column", gap: "0.35rem"
-                      }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontWeight: 700, fontSize: "0.85rem", color: "#f97316" }}>{notif.senderName}</span>
-                        <span style={{ fontSize: "0.7rem", color: "var(--color-text-tertiary)" }}>
-                          {new Date(notif.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                      <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-text-primary)", lineHeight: 1.4 }}>{notif.message}</p>
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div style={{ padding: "1rem 1.5rem 0.5rem", flexShrink: 0 }}>
+              <h4 style={{ margin: 0, color: "var(--color-text-secondary)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Últimas Mensagens Enviadas</h4>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 1.5rem 1.5rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              {globalNotifications.length === 0 ? (
+                <div style={{ padding: "2rem 1rem", textAlign: "center", color: "var(--color-text-tertiary)", fontSize: "0.85rem" }}>Nenhuma mensagem global no histórico.</div>
+              ) : (
+                globalNotifications.map((notif: any) => (
+                  <div 
+                    key={notif.id}
+                    style={{ 
+                      padding: "0.875rem 1rem", background: "var(--color-surface)", border: "1px solid var(--color-border)",
+                      borderRadius: "var(--radius-md)", display: "flex", flexDirection: "column", gap: "0.35rem"
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontWeight: 700, fontSize: "0.85rem", color: "#f97316" }}>{notif.senderName}</span>
+                      <span style={{ fontSize: "0.7rem", color: "var(--color-text-tertiary)" }}>
+                        {new Date(notif.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                    <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-text-primary)", lineHeight: 1.4 }}>{notif.message}</p>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}
 
       {/* MODAL ABRIR PLANTAS */}
-      {showCommsPlansModal && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--color-bg)", zIndex: 10001, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      {activePanel === 'zello' && showCommsPlansModal && (
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: "calc(76px + env(safe-area-inset-bottom))", background: "var(--color-bg)", zIndex: 9500, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={{ background: "linear-gradient(135deg, #312e81, #1e1b4b)", padding: "1.25rem 1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
               <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "rgba(255,255,255,0.2)", border: "1px solid rgba(255,255,255,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -2084,21 +2095,25 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
           <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", position: "relative" }}>
             {!selectedCommsPlan ? (
               <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
-                <h4 style={{ margin: 0, color: "var(--color-text-secondary)", fontSize: "0.85rem", textTransform: "uppercase" }}>Plantas Disponíveis</h4>
-                {activeWorkplace?.plans?.map((plan: any) => (
-                  <div 
-                    key={plan.id}
-                    onClick={() => setSelectedCommsPlan(plan)}
-                    style={{ padding: "1.2rem", background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)", cursor: "pointer", display: "flex", alignItems: "center", gap: "1rem" }}
-                  >
-                    <img src={plan.imageUrl} alt={plan.name} style={{ width: "60px", height: "60px", objectFit: "cover", borderRadius: "var(--radius-md)" }} />
-                    <span style={{ fontWeight: 700, fontSize: "1rem", color: "var(--color-text-primary)" }}>{plan.name}</span>
-                  </div>
-                ))}
+                <h4 style={{ margin: 0, color: "var(--color-text-secondary)", fontSize: "0.85rem", textTransform: "uppercase" }}>Plantas Disponíveis ({workplacePlans.length})</h4>
+                {workplacePlans.length === 0 ? (
+                  <p style={{ color: "var(--color-text-tertiary)", fontStyle: "italic" }}>Nenhuma planta carregada em Plantas e Escalas.</p>
+                ) : (
+                  workplacePlans.map((plan: any) => (
+                    <div 
+                      key={plan.id}
+                      onClick={() => setSelectedCommsPlan(plan)}
+                      style={{ padding: "1.2rem", background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)", cursor: "pointer", display: "flex", alignItems: "center", gap: "1rem" }}
+                    >
+                      <img src={plan.imageUrl} alt={plan.name} style={{ width: "60px", height: "60px", objectFit: "cover", borderRadius: "var(--radius-md)" }} />
+                      <span style={{ fontWeight: 700, fontSize: "1rem", color: "var(--color-text-primary)" }}>{plan.name}</span>
+                    </div>
+                  ))
+                )}
               </div>
             ) : (
               <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-                {activeWorkplace?.plans?.length > 1 && (
+                {workplacePlans.length > 1 && (
                   <div style={{ padding: "0.5rem 1rem", background: "var(--color-surface)", borderBottom: "1px solid var(--color-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <button onClick={() => { setSelectedCommsPlan(null); setSelectedPinInfo(null); }} style={{ background: "none", border: "none", color: "var(--color-primary)", fontWeight: 600, cursor: "pointer", fontSize: "0.85rem" }}>⬅ Trocar Planta</button>
                     <span style={{ fontSize: "0.85rem", fontWeight: 700 }}>{selectedCommsPlan.name}</span>
@@ -2118,7 +2133,6 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
                   />
                 </div>
 
-                {/* PIN INFO OVERLAY */}
                 {selectedPinInfo && (
                   <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "var(--color-surface)", borderTop: "2px solid #6366f1", padding: "1.25rem", boxShadow: "0 -4px 20px rgba(0,0,0,0.2)", zIndex: 100, maxHeight: "60%", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -2162,16 +2176,16 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
       )}
 
       {/* MODAL VER EQUIPA */}
-      {showTeamMembersModal && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--color-bg)", zIndex: 10001, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      {activePanel === 'zello' && showTeamMembersModal && (
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: "calc(76px + env(safe-area-inset-bottom))", background: "var(--color-bg)", zIndex: 9500, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={{ background: "linear-gradient(135deg, #065f46, #047857)", padding: "1.25rem 1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
               <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "rgba(255,255,255,0.2)", border: "1px solid rgba(255,255,255,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Users size={18} color="#ffffff" />
               </div>
               <div>
-                <h3 style={{ margin: 0, color: "#ffffff", fontSize: "1rem", fontWeight: 700 }}>Equipa Atribuída</h3>
-                <p style={{ margin: 0, fontSize: "0.75rem", color: "#a7f3d0" }}>Seguranças em Turno</p>
+                <h3 style={{ margin: 0, color: "#ffffff", fontSize: "1rem", fontWeight: 700 }}>Equipa do Local</h3>
+                <p style={{ margin: 0, fontSize: "0.75rem", color: "#a7f3d0" }}>Todos os Seguranças ({workplaceGuardsList.length})</p>
               </div>
             </div>
             <button onClick={() => { setShowTeamMembersModal(false); setSelectedTeamMemberDetails(null); }} style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "white", cursor: "pointer", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={18} /></button>
@@ -2180,16 +2194,15 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
           <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "1.5rem" }}>
             {!selectedTeamMemberDetails ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                {Array.from(userIds).length === 0 ? (
-                  <p style={{ color: "var(--color-text-tertiary)", fontStyle: "italic" }}>Nenhum vigia associado aos turnos atuais.</p>
+                {workplaceGuardsList.length === 0 ? (
+                  <p style={{ color: "var(--color-text-tertiary)", fontStyle: "italic" }}>Nenhum vigia associado a este local.</p>
                 ) : (
-                  Array.from(userIds).map(id => {
-                    const v = teamVigias[id] || { name: "Segurança" };
-                    const vigiaShifts = teamShifts.filter(s => (s.vigiaId === id || s.personId === id || s.userId === id) && (s.status === 'active' || s.status === 'pending'));
+                  workplaceGuardsList.map((v: any) => {
+                    const vigiaShifts = teamShifts.filter(s => (s.vigiaId === v.id || s.personId === v.id || s.userId === v.id) && (s.status === 'active' || s.status === 'pending'));
                     return (
                       <div 
-                        key={id}
-                        onClick={() => setSelectedTeamMemberDetails({ id, ...v })}
+                        key={v.id}
+                        onClick={() => setSelectedTeamMemberDetails(v)}
                         style={{ padding: "1rem", background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
                       >
                         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
@@ -2198,7 +2211,9 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
                           </div>
                           <div>
                             <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--color-text-primary)" }}>{v.name || v.email || "Segurança"}</div>
-                            <div style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)" }}>Turnos ({vigiaShifts.length})</div>
+                            <div style={{ fontSize: "0.75rem", color: vigiaShifts.length > 0 ? "#10b981" : "var(--color-text-tertiary)", fontWeight: vigiaShifts.length > 0 ? 600 : 400 }}>
+                              {vigiaShifts.length > 0 ? `Turnos Ativos/Previstos (${vigiaShifts.length})` : 'Sem turno atribuído no momento'}
+                            </div>
                           </div>
                         </div>
                         <span style={{ color: "var(--color-text-tertiary)" }}>➔</span>
@@ -2227,28 +2242,34 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
                 <div>
                   <h4 style={{ margin: "0 0 0.75rem", color: "var(--color-text-secondary)", fontSize: "0.85rem", textTransform: "uppercase" }}>Turnos Atribuídos</h4>
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                    {teamShifts.filter(s => s.vigiaId === selectedTeamMemberDetails.id || s.personId === selectedTeamMemberDetails.id || s.userId === selectedTeamMemberDetails.id).map((shift: any) => (
-                      <div key={shift.id} style={{ padding: "1rem", background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <div>
-                          <div style={{ fontWeight: 700, color: "var(--color-text-primary)", fontSize: "0.9rem" }}>
-                            {shift.status === 'active' ? '🟢 Ativo' : '🟡 Previsto'}: {shift.locatorName || "Posto"}
+                    {(() => {
+                      const memberShifts = teamShifts.filter(s => s.vigiaId === selectedTeamMemberDetails.id || s.personId === selectedTeamMemberDetails.id || s.userId === selectedTeamMemberDetails.id);
+                      if (memberShifts.length === 0) {
+                        return <p style={{ fontSize: "0.85rem", color: "var(--color-text-tertiary)", fontStyle: "italic" }}>Nenhum turno ativo ou previsto agendado para este vigia.</p>;
+                      }
+                      return memberShifts.map((shift: any) => (
+                        <div key={shift.id} style={{ padding: "1rem", background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div>
+                            <div style={{ fontWeight: 700, color: "var(--color-text-primary)", fontSize: "0.9rem" }}>
+                              {shift.status === 'active' ? '🟢 Ativo' : '🟡 Previsto'}: {shift.locatorName || "Posto"}
+                            </div>
+                            <div style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)", marginTop: "0.25rem" }}>
+                              🕐 {shift.startTime ? new Date(shift.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : ''} - {shift.endTime ? new Date(shift.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : ''}
+                            </div>
                           </div>
-                          <div style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)", marginTop: "0.25rem" }}>
-                            🕐 {shift.startTime ? new Date(shift.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : ''} - {shift.endTime ? new Date(shift.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : ''}
-                          </div>
+                          <button 
+                            onClick={() => {
+                              setShowTeamMembersModal(false);
+                              setSelectedTeamMemberDetails(null);
+                              viewMap(shift);
+                            }}
+                            style={{ padding: "0.5rem 0.8rem", background: "rgba(16,185,129,0.1)", color: "#10b981", border: "1px solid rgba(16,185,129,0.3)", borderRadius: "var(--radius-md)", fontWeight: 700, fontSize: "0.8rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.35rem" }}
+                          >
+                            <MapPin size={14} /> Ver na Planta
+                          </button>
                         </div>
-                        <button 
-                          onClick={() => {
-                            setShowTeamMembersModal(false);
-                            setSelectedTeamMemberDetails(null);
-                            viewMap(shift);
-                          }}
-                          style={{ padding: "0.5rem 0.8rem", background: "rgba(16,185,129,0.1)", color: "#10b981", border: "1px solid rgba(16,185,129,0.3)", borderRadius: "var(--radius-md)", fontWeight: 700, fontSize: "0.8rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.35rem" }}
-                        >
-                          <MapPin size={14} /> Ver na Planta
-                        </button>
-                      </div>
-                    ))}
+                      ));
+                    })()}
                   </div>
                 </div>
               </div>
@@ -2258,8 +2279,8 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
       )}
 
       {/* MODAL MENSAGEM DIRETA INDIVIDUAL */}
-      {showDirectMsgModal && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", zIndex: 100005, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
+      {activePanel === 'zello' && showDirectMsgModal && (
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: "calc(76px + env(safe-area-inset-bottom))", background: "rgba(0,0,0,0.85)", zIndex: 9900, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
           <div style={{ background: "var(--color-surface)", width: "100%", maxWidth: "450px", borderRadius: "var(--radius-lg)", overflow: "hidden", border: "1px solid var(--color-border)" }}>
             <div style={{ background: "#6366f1", padding: "1rem 1.25rem", display: "flex", justifyContent: "space-between", alignItems: "center", color: "white" }}>
               <h4 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>Mensagem para {showDirectMsgModal.vigiaName}</h4>
