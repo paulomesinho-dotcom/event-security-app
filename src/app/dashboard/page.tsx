@@ -124,7 +124,7 @@ function VigiaWorkplaceName() {
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
-  const { hasActiveShift, activeWorkplaceId } = useWorkplace();
+  const { hasActiveShift, activeWorkplaceId, workplaces, setActiveWorkplaceId } = useWorkplace();
   const router = useRouter();
   
   const [activeTab, setActiveTab] = useState("overview");
