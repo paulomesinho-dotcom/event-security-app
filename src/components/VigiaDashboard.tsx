@@ -1590,7 +1590,7 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
             <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: "rgba(249, 115, 22, 0.15)", border: "1.5px solid rgba(249,115,22,0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "#f97316" }}>
               <Radio size={20} fill="currentColor" />
             </div>
-            <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "#f97316" }}>Rádio</span>
+            <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "#f97316" }}>Comunicações</span>
           </button>
           <button onClick={() => { stopAlertBeeps(); setActivePanel("suspects"); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.3rem", background: "none", border: "none", cursor: "pointer", flex: "1 0 auto" }}>
             <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: activeSuspects.length > 0 ? "rgba(168,85,247,0.2)" : "rgba(168,85,247,0.08)", border: activeSuspects.length > 0 ? "1.5px solid rgba(168,85,247,0.7)" : "1.5px solid rgba(168,85,247,0.3)", display: "flex", alignItems: "center", justifyContent: "center", color: "#a855f7", position: "relative", animation: activeSuspects.length > 0 ? "suspectPulse 3s ease-in-out infinite" : "none" }}>

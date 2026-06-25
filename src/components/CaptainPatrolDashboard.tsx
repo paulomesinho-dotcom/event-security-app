@@ -1885,7 +1885,7 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
           <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: "rgba(249, 115, 22, 0.15)", border: "1.5px solid rgba(249,115,22,0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "#f97316" }}>
             <Radio size={20} fill="currentColor" />
           </div>
-          <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "#f97316" }}>Rádio</span>
+          <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "#f97316" }}>Comunicações</span>
         </button>
 
         {/* Suspects */}
