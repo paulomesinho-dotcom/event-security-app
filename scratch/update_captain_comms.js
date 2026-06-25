@@ -4,6 +4,9 @@ const path = require('path');
 const filePath = path.join(__dirname, '../src/components/CaptainPatrolDashboard.tsx');
 let content = fs.readFileSync(filePath, 'utf8');
 
+// Normalize to LF for reliable string searching
+content = content.replace(/\r\n/g, '\n');
+
 // 1. Add Users to lucide-react import
 if (!content.includes(', Users,') && !content.includes(', Users }')) {
   content = content.replace('import { MapPin,', 'import { MapPin, Users,');
@@ -158,15 +161,35 @@ const newZelloContent = `<div style={{ flex: 1, minHeight: 0, overflowY: "auto" 
               </div>
             </div>`;
 
-// Let's find start and end
-const startIndex = content.indexOf(oldZelloStart);
-if (startIndex !== -1) {
-  let endIndex = content.indexOf('Canal Capitães não configurado', startIndex);
-  if (endIndex !== -1) {
-    endIndex = content.indexOf('</div>', endIndex);
-    if (endIndex !== -1) {
-      endIndex = content.indexOf(')}', endIndex) + 2;
-      content = content.substring(0, startIndex) + newZelloContent + content.substring(endIndex);
+// Find start and end inside activePanel === 'zello'
+const zelloHeaderEnd = '<h3 style={{ margin: 0, color: "#ffedd5", fontSize: "1rem", fontWeight: 700 }}>Comunicações</h3>';
+const headerIndex = content.indexOf(zelloHeaderEnd);
+if (headerIndex !== -1) {
+  const startIndex = content.indexOf(oldZelloStart, headerIndex);
+  if (startIndex !== -1) {
+    // Find where activePanel === 'zello' block ends
+    const panelEndToken = '{showGlobalAlertModal && (';
+    const nextPanelIndex = content.indexOf(panelEndToken, startIndex);
+    if (nextPanelIndex !== -1) {
+      // Find the last </div> before {showGlobalAlertModal && (
+      const beforePanel = content.substring(0, nextPanelIndex);
+      const lastDivs = beforePanel.lastIndexOf('</div>');
+      // Let's find the closing of the oldZelloStart container
+      // In the original file, right before {showGlobalAlertModal && (, there are:
+      //                   </div>
+      //                 )}
+      //               </div>
+      //             </div>
+      //           )}
+      // Let's locate 'Canal Capitães não configurado'
+      const capNotConfig = content.indexOf('Canal Capitães não configurado', startIndex);
+      if (capNotConfig !== -1) {
+        const closeDiv1 = content.indexOf('</div>', capNotConfig);
+        const closeIf = content.indexOf(')}', closeDiv1);
+        const closeContainer = content.indexOf('</div>', closeIf) + 6; // closes oldZelloStart
+        
+        content = content.substring(0, startIndex) + newZelloContent + content.substring(closeContainer);
+      }
     }
   }
 }
@@ -287,7 +310,6 @@ const newModalsCode = `{/* MODAL NOTIFICAR EQUIPA */}
                     imageUrl={selectedCommsPlan.imageUrl}
                     locators={locators.filter(l => !l.planId || l.planId === selectedCommsPlan.id)}
                     onLocatorClick={(locator) => {
-                      // Find guards on this pin
                       const guardsOnPin = teamShifts.filter(s => (s.locatorName === locator.name || s.locationId === locator.id) && (s.status === 'active' || s.status === 'pending')).map(s => {
                         const v = teamVigias[s.vigiaId || s.personId || s.userId] || { name: s.personName || "Segurança" };
                         return { id: s.vigiaId || s.personId || s.userId, name: v.name || v.email || "Segurança", status: s.status, shiftTime: \`\${s.startTime ? new Date(s.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : ''} - \${s.endTime ? new Date(s.endTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : ''}\` };
