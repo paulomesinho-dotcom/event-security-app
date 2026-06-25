@@ -1888,7 +1888,6 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
                 )}
               </div>
             </div>
-            </div>
           </div>
         )}
 
