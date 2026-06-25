@@ -161,27 +161,12 @@ const newZelloContent = `<div style={{ flex: 1, minHeight: 0, overflowY: "auto" 
               </div>
             </div>`;
 
-// Find start and end inside activePanel === 'zello'
-const zelloHeaderEnd = '<h3 style={{ margin: 0, color: "#ffedd5", fontSize: "1rem", fontWeight: 700 }}>Comunicações</h3>';
-const headerIndex = content.indexOf(zelloHeaderEnd);
-if (headerIndex !== -1) {
-  const startIndex = content.indexOf(oldZelloStart, headerIndex);
-  if (startIndex !== -1) {
-    // Find where activePanel === 'zello' block ends
-    const panelEndToken = '{showGlobalAlertModal && (';
-    const nextPanelIndex = content.indexOf(panelEndToken, startIndex);
-    if (nextPanelIndex !== -1) {
-      // Find the last </div> before {showGlobalAlertModal && (
-      const beforePanel = content.substring(0, nextPanelIndex);
-      const lastDivs = beforePanel.lastIndexOf('</div>');
-      // Let's find the closing of the oldZelloStart container
-      // In the original file, right before {showGlobalAlertModal && (, there are:
-      //                   </div>
-      //                 )}
-      //               </div>
-      //             </div>
-      //           )}
-      // Let's locate 'Canal Capitães não configurado'
+if (!content.includes('ABRIR PLANTAS')) {
+  const zelloHeaderEnd = '<h3 style={{ margin: 0, color: "#ffedd5", fontSize: "1rem", fontWeight: 700 }}>Comunicações</h3>';
+  const headerIndex = content.indexOf(zelloHeaderEnd);
+  if (headerIndex !== -1) {
+    const startIndex = content.indexOf(oldZelloStart, headerIndex);
+    if (startIndex !== -1) {
       const capNotConfig = content.indexOf('Canal Capitães não configurado', startIndex);
       if (capNotConfig !== -1) {
         const closeDiv1 = content.indexOf('</div>', capNotConfig);
@@ -493,8 +478,14 @@ const newModalsCode = `{/* MODAL NOTIFICAR EQUIPA */}
 
       {mapModalData && (`;
 
-if (!content.includes('showCommsPlansModal')) {
-  content = content.replace(modalsTarget, newModalsCode);
+if (!content.includes('MODAL NOTIFICAR EQUIPA')) {
+  // Locate {mapModalData && ( regardless of indentation
+  const mapModalRegex = /(\s*)\{mapModalData && \(/;
+  const match = content.match(mapModalRegex);
+  if (match) {
+    const indent = match[1];
+    content = content.replace(match[0], indent + newModalsCode);
+  }
 }
 
 fs.writeFileSync(filePath, content, 'utf8');
