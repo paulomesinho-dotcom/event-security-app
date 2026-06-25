@@ -969,8 +969,9 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
             </div>
             <button onClick={() => setActivePanel(null)} style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "white", cursor: "pointer", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={18}/></button>
           </div>
-          <div style={{ padding: "1rem", flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.75rem", paddingBottom: "3rem" }}>
-                          <div style={{ display: "flex", background: "var(--color-surface)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: "var(--radius-lg)", padding: "0.25rem", marginBottom: "1rem" }}>
+          <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
+            <div style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem", paddingBottom: "3rem" }}>
+              <div style={{ display: "flex", background: "var(--color-surface)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: "var(--radius-lg)", padding: "0.25rem", marginBottom: "1rem" }}>
                 <button 
                   onClick={() => setIncidentTab("ativas")}
                   style={{ flex: 1, padding: "0.6rem", background: incidentTab === "ativas" ? "rgba(239,68,68,0.15)" : "transparent", color: incidentTab === "ativas" ? "#ef4444" : "var(--color-text-secondary)", border: "none", borderRadius: "var(--radius-md)", fontWeight: incidentTab === "ativas" ? 600 : 500, fontSize: "0.85rem", cursor: "pointer", transition: "all 0.2s" }}
@@ -1049,6 +1050,7 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
                    </div>
                  ))
               )}
+            </div>
           </div>
         </div>
       )}
@@ -1201,7 +1203,8 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
             </div>
             <button onClick={() => setActivePanel(null)} style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "white", cursor: "pointer", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={18}/></button>
           </div>
-          <div style={{ padding: "1rem", flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.75rem", paddingBottom: "3rem" }}>
+          <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
+            <div style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem", paddingBottom: "3rem" }}>
             <button 
               onClick={() => {
                 setSuspectLocal(activeShiftLocation?.local || activeWorkplace?.name || activeShift?.locatorName || (pendingShifts[0]?.locatorName) || "");
@@ -1247,6 +1250,7 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
                  </div>
                ))
             )}
+            </div>
           </div>
         </div>
       )}
@@ -1426,7 +1430,8 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
             </div>
             <button onClick={() => setActivePanel(null)} style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "white", cursor: "pointer", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={18}/></button>
           </div>
-          <div style={{ padding: "1rem", flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.75rem", paddingBottom: "3rem" }}>
+          <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
+            <div style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem", paddingBottom: "3rem" }}>
             
             {activeWorkplace && (
               <div style={{ 
@@ -1471,6 +1476,7 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
                 </div>
               ))
             )}
+            </div>
           </div>
         </div>
       )}

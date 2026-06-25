@@ -303,6 +303,13 @@ export default function CaptainPatrolDashboard({ onOpenMap, isSidebarOpen, force
     return acc;
   }, {} as Record<string, any[]>);
 
+  const sortedInfoTopics = Object.entries(groupedInfoItems).sort(([topicA, itemsA], [topicB, itemsB]) => {
+    const minA = Math.min(...(itemsA as any[]).map(i => typeof i.order === "number" ? i.order : 999));
+    const minB = Math.min(...(itemsB as any[]).map(i => typeof i.order === "number" ? i.order : 999));
+    if (minA !== minB) return minA - minB;
+    return topicA.localeCompare(topicB);
+  });
+
   // Instead of showSuspectsList, showIncidentsList, we will replace them where used.
 const [allSuspects, setAllSuspects] = useState<any[]>([]);
   const [suspectTab, setSuspectTab] = useState<"ativos" | "arquivados">("ativos");
@@ -1628,7 +1635,8 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
             </div>
             <button onClick={() => setActivePanel(null)} style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "white", cursor: "pointer", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={18}/></button>
           </div>
-          <div style={{ padding: "1rem", flex: 1, minWidth: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.75rem", paddingBottom: "3rem" }}>
+          <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
+            <div style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem", paddingBottom: "3rem" }}>
             
             {activeWorkplace && (
               <div style={{ 
@@ -1696,8 +1704,8 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
             {Object.keys(groupedInfoItems).length === 0 ? (
               <p style={{ textAlign: "center", color: "var(--color-text-secondary)", marginTop: "2rem" }}>Nenhuma informação publicada.</p>
             ) : (
-              Object.entries(groupedInfoItems).map(([topic, topicItems]) => (
-                <div key={topic} style={{ background: "var(--color-surface)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", overflow: "hidden" }}>
+              sortedInfoTopics.map(([topic, topicItems]) => (
+                <div key={topic} style={{ flexShrink: 0, background: "var(--color-surface)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", overflow: "hidden" }}>
                   <button 
                     onClick={() => setExpandedInfoTopics(prev => ({ ...prev, [topic]: !prev[topic] }))}
                     style={{ width: "100%", padding: "1rem", display: "flex", justifyContent: "space-between", alignItems: "center", background: "transparent", border: "none", cursor: "pointer", color: "var(--color-primary)", fontWeight: 600, fontSize: "1rem" }}
@@ -1718,6 +1726,7 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
                 </div>
               ))
             )}
+            </div>
           </div>
         </div>
       )}
