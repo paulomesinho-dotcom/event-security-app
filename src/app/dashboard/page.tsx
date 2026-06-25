@@ -263,22 +263,37 @@ export default function DashboardPage() {
               {workplaces.length > 1 ? (
                 <button 
                   onClick={() => setShowPatrolWpModal(true)}
-                  style={{ background: "linear-gradient(135deg, rgba(37,99,235,0.12), rgba(29,78,216,0.2))", border: "1px solid rgba(59,130,246,0.4)", color: "#38bdf8", padding: "0.2rem 0.65rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: "0.3rem", marginTop: "0.25rem" }}
+                  style={{ 
+                    background: "rgba(56, 189, 248, 0.12)", 
+                    border: "1px solid rgba(56, 189, 248, 0.35)", 
+                    color: "#38bdf8", 
+                    padding: "0.25rem 0.75rem", 
+                    borderRadius: "999px", 
+                    fontSize: "0.78rem", 
+                    fontWeight: 700, 
+                    cursor: "pointer", 
+                    display: "inline-flex", 
+                    alignItems: "center", 
+                    gap: "0.4rem", 
+                    marginTop: "0.3rem",
+                    boxShadow: "0 2px 8px rgba(56, 189, 248, 0.15)",
+                    transition: "all 0.2s ease"
+                  }}
                 >
-                  📍 {activeWp?.name || "Escolher Local"} ▼
+                  <MapPin size={13} />
+                  <span>{activeWp?.name || "Escolher Local"}</span>
+                  <ChevronDown size={13} style={{ opacity: 0.8 }} />
                 </button>
               ) : (
-                <span style={{ fontSize: "0.72rem", color: "var(--color-text-secondary)", fontWeight: 500, marginTop: "0.1rem", display: "block" }}>
-                  📍 {activeWp?.name || "MODO PATRULHA"}
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.75rem", color: "var(--color-text-secondary)", fontWeight: 600, marginTop: "0.2rem" }}>
+                  <MapPin size={13} color="var(--color-primary)" />
+                  {activeWp?.name || "MODO PATRULHA"}
                 </span>
               )}
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--color-text-secondary)", marginRight: "0.5rem" }} className="hidden-mobile">{user?.name || user?.email?.split('@')[0]}</span>
-            <button onClick={() => setIsPatrolMode(false)} className="btn btn-secondary" style={{ padding: "0.4rem", fontSize: "0.75rem", borderRadius: "var(--radius-md)", display: "flex", alignItems: "center", gap: "0.3rem" }} title="Voltar ao Painel de Gestão">
-              <LayoutDashboard size={16} /> <span className="hidden-mobile">Gestão</span>
-            </button>
             <button onClick={handleLogout} className="btn" style={{ padding: "0.4rem", fontSize: "0.75rem", background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: "var(--radius-md)" }} title="Terminar Sessão"><LogOut size={16} /></button>
           </div>
         </nav>
