@@ -2,28 +2,16 @@
 
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, onSnapshot, addDoc, deleteDoc, doc, updateDoc, orderBy, getDoc } from "firebase/firestore";
-import { Bell, Trash2, Edit2, Plus, Info, Check, X } from "lucide-react";
-import dynamic from "next/dynamic";
-import "react-quill-new/dist/quill.snow.css";
-
-const ReactQuill = dynamic(() => import("react-quill-new"), { ssr: false });
-
-const quillModules = {
-  toolbar: [
-    [{ 'header': [1, 2, 3, false] }],
-    ['bold', 'italic', 'underline', 'strike'],
-    [{'list': 'ordered'}, {'list': 'bullet'}],
-    ['link'],
-    ['clean']
-  ],
-};
+import { collection, query, onSnapshot, addDoc, deleteDoc, doc, updateDoc, orderBy } from "firebase/firestore";
+import { Trash2, Edit2, Plus, Info, Check } from "lucide-react";
+import { Editor, EditorProvider } from "react-simple-wysiwyg";
 
 interface InfoItem {
   id: string;
   topic: string;
   title: string;
   content: string;
+  order?: number;
   createdAt: string;
 }
 
@@ -32,11 +20,10 @@ export default function InformationManager({ readOnly = false }: { readOnly?: bo
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState<string | null>(null);
 
-
-
   // Form State
   const [topic, setTopic] = useState("");
   const [title, setTitle] = useState("");
+  const [order, setOrder] = useState<number>(1);
   const [content, setContent] = useState("");
 
   useEffect(() => {
@@ -58,6 +45,7 @@ export default function InformationManager({ readOnly = false }: { readOnly?: bo
         await updateDoc(doc(db, "information", isEditing), {
           topic: topic.trim(),
           title: title.trim(),
+          order: Number(order) || 1,
           content: content.trim()
         });
         setIsEditing(null);
@@ -65,12 +53,14 @@ export default function InformationManager({ readOnly = false }: { readOnly?: bo
         await addDoc(collection(db, "information"), {
           topic: topic.trim(),
           title: title.trim(),
+          order: Number(order) || 1,
           content: content.trim(),
           createdAt: new Date().toISOString()
         });
       }
       setTopic("");
       setTitle("");
+      setOrder(1);
       setContent("");
     } catch (error) {
       console.error("Error saving information:", error);
@@ -82,6 +72,7 @@ export default function InformationManager({ readOnly = false }: { readOnly?: bo
     setIsEditing(item.id);
     setTopic(item.topic);
     setTitle(item.title);
+    setOrder(item.order ?? 1);
     setContent(item.content);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -101,6 +92,7 @@ export default function InformationManager({ readOnly = false }: { readOnly?: bo
     setIsEditing(null);
     setTopic("");
     setTitle("");
+    setOrder(1);
     setContent("");
   };
 
@@ -112,6 +104,13 @@ export default function InformationManager({ readOnly = false }: { readOnly?: bo
     acc[item.topic].push(item);
     return acc;
   }, {} as Record<string, InfoItem[]>);
+
+  const sortedTopics = Object.entries(groupedItems).sort(([topicA, itemsA], [topicB, itemsB]) => {
+    const minA = Math.min(...itemsA.map(i => typeof i.order === "number" ? i.order : 999));
+    const minB = Math.min(...itemsB.map(i => typeof i.order === "number" ? i.order : 999));
+    if (minA !== minB) return minA - minB;
+    return topicA.localeCompare(topicB);
+  });
 
   return (
     <div style={{ maxWidth: "800px", margin: "0 auto", padding: "2rem 1rem" }}>
@@ -136,65 +135,78 @@ export default function InformationManager({ readOnly = false }: { readOnly?: bo
 
       {!readOnly && (
         <div className="glass" style={{ background: "var(--color-surface)", padding: "2rem", borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)", marginBottom: "2rem" }}>
-        <h3 style={{ marginTop: 0, marginBottom: "1.5rem", color: "var(--color-text-primary)" }}>
-          {isEditing ? "Editar Informação" : "Criar Nova Informação"}
-        </h3>
-        
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "1rem" }}>
-            <div>
-              <label className="label">Tópico / Categoria</label>
-              <input
-                type="text"
-                className="input"
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                placeholder="Ex: Normas de Segurança"
-                required
-                list="topic-list"
-              />
-              <datalist id="topic-list">
-                {Object.keys(groupedItems).map(t => <option key={t} value={t} />)}
-              </datalist>
-            </div>
-            <div>
-              <label className="label">Título</label>
-              <input
-                type="text"
-                className="input"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Ex: Utilização de Rádios"
-                required
-              />
-            </div>
-          </div>
+          <h3 style={{ marginTop: 0, marginBottom: "1.5rem", color: "var(--color-text-primary)" }}>
+            {isEditing ? "Editar Informação" : "Criar Nova Informação"}
+          </h3>
           
-          <div>
-            <label className="label">Conteúdo</label>
-            <div className="quill-wrapper">
-              <ReactQuill 
-                theme="snow"
-                value={content}
-                onChange={setContent}
-                modules={quillModules}
-                placeholder="Escreva a informação aqui..."
-              />
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 2fr 1fr", gap: "1rem" }}>
+              <div>
+                <label className="label">Tópico / Categoria</label>
+                <input
+                  type="text"
+                  className="input"
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                  placeholder="Ex: Normas de Segurança"
+                  required
+                  list="topic-list"
+                />
+                <datalist id="topic-list">
+                  {Object.keys(groupedItems).map(t => <option key={t} value={t} />)}
+                </datalist>
+              </div>
+              <div>
+                <label className="label">Título</label>
+                <input
+                  type="text"
+                  className="input"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Ex: Utilização de Rádios"
+                  required
+                />
+              </div>
+              <div>
+                <label className="label">Ordem na App</label>
+                <input
+                  type="number"
+                  className="input"
+                  value={order}
+                  onChange={(e) => setOrder(Number(e.target.value))}
+                  placeholder="1"
+                  min={1}
+                  required
+                />
+              </div>
             </div>
-          </div>
+            
+            <div>
+              <label className="label">Conteúdo</label>
+              <div className="wysiwyg-wrapper">
+                <EditorProvider>
+                  <Editor 
+                    value={content} 
+                    onChange={(e) => setContent(e.target.value)} 
+                    placeholder="Escreva a informação aqui..."
+                    style={{ minHeight: "150px", background: "var(--color-surface)", color: "var(--color-text-primary)" }}
+                  />
+                </EditorProvider>
+              </div>
+            </div>
 
-          <div style={{ display: "flex", gap: "1rem", justifyContent: "flex-end", marginTop: "0.5rem" }}>
-            {isEditing && (
-              <button type="button" onClick={cancelEdit} className="btn btn-secondary">
-                Cancelar
+            <div style={{ display: "flex", gap: "1rem", justifyContent: "flex-end", marginTop: "0.5rem" }}>
+              {isEditing && (
+                <button type="button" onClick={cancelEdit} className="btn btn-secondary">
+                  Cancelar
+                </button>
+              )}
+              <button type="submit" className="btn btn-primary" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                {isEditing ? <><Check size={16} /> Guardar Alterações</> : <><Plus size={16} /> Criar Informação</>}
               </button>
-            )}
-            <button type="submit" className="btn btn-primary" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              {isEditing ? <><Check size={16} /> Guardar Alterações</> : <><Plus size={16} /> Criar Informação</>}
-            </button>
-          </div>
-        </form>
-      </div>
+            </div>
+          </form>
+        </div>
       )}
 
       <h3 style={{ margin: "0 0 1rem 0", color: "var(--color-text-primary)" }}>Informações Publicadas</h3>
@@ -205,10 +217,13 @@ export default function InformationManager({ readOnly = false }: { readOnly?: bo
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-          {Object.entries(groupedItems).map(([grpTopic, grpItems]) => (
+          {sortedTopics.map(([grpTopic, grpItems]) => (
             <div key={grpTopic} style={{ background: "var(--color-surface)", borderRadius: "var(--radius-lg)", overflow: "hidden", border: "1px solid var(--color-border)" }}>
-              <div style={{ background: "var(--color-bg)", padding: "1rem 1.5rem", borderBottom: "1px solid var(--color-border)" }}>
+              <div style={{ background: "var(--color-bg)", padding: "1rem 1.5rem", borderBottom: "1px solid var(--color-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <h4 style={{ margin: 0, color: "var(--color-primary)" }}>{grpTopic}</h4>
+                <span style={{ fontSize: "0.75rem", background: "var(--color-surface)", padding: "0.2rem 0.6rem", borderRadius: "var(--radius-full)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border)" }}>
+                  Ordem: {Math.min(...grpItems.map(i => typeof i.order === "number" ? i.order : 999))}
+                </span>
               </div>
               <div>
                 {grpItems.map(item => (
@@ -241,3 +256,4 @@ export default function InformationManager({ readOnly = false }: { readOnly?: bo
     </div>
   );
 }
+

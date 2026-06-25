@@ -289,6 +289,13 @@ export default function VigiaDashboard() {
     return acc;
   }, {} as Record<string, any[]>);
 
+  const sortedInfoTopics = Object.entries(groupedInfoItems).sort(([topicA, itemsA], [topicB, itemsB]) => {
+    const minA = Math.min(...(itemsA as any[]).map(i => typeof i.order === "number" ? i.order : 999));
+    const minB = Math.min(...(itemsB as any[]).map(i => typeof i.order === "number" ? i.order : 999));
+    if (minA !== minB) return minA - minB;
+    return topicA.localeCompare(topicB);
+  });
+
   // Instead of showSuspectsList, showIncidentsList, we will replace them where used.
 const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
     const [showNewSuspectModal, setShowNewSuspectModal] = useState(false);
@@ -962,7 +969,7 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
             </div>
             <button onClick={() => setActivePanel(null)} style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "white", cursor: "pointer", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={18}/></button>
           </div>
-          <div style={{ padding: "1rem", flex: 1, minWidth: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.75rem", paddingBottom: "3rem" }}>
+          <div style={{ padding: "1rem", flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.75rem", paddingBottom: "3rem" }}>
                           <div style={{ display: "flex", background: "var(--color-surface)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: "var(--radius-lg)", padding: "0.25rem", marginBottom: "1rem" }}>
                 <button 
                   onClick={() => setIncidentTab("ativas")}
@@ -1194,7 +1201,7 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
             </div>
             <button onClick={() => setActivePanel(null)} style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "white", cursor: "pointer", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={18}/></button>
           </div>
-          <div style={{ padding: "1rem", flex: 1, minWidth: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.75rem", paddingBottom: "3rem" }}>
+          <div style={{ padding: "1rem", flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.75rem", paddingBottom: "3rem" }}>
             <button 
               onClick={() => {
                 setSuspectLocal(activeShiftLocation?.local || activeWorkplace?.name || activeShift?.locatorName || (pendingShifts[0]?.locatorName) || "");
@@ -1419,7 +1426,7 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
             </div>
             <button onClick={() => setActivePanel(null)} style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "white", cursor: "pointer", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={18}/></button>
           </div>
-          <div style={{ padding: "1rem", flex: 1, minWidth: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.75rem", paddingBottom: "3rem" }}>
+          <div style={{ padding: "1rem", flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.75rem", paddingBottom: "3rem" }}>
             
             {activeWorkplace && (
               <div style={{ 
@@ -1442,7 +1449,7 @@ const [activeSuspects, setActiveSuspects] = useState<any[]>([]);
             {Object.keys(groupedInfoItems).length === 0 ? (
               <p style={{ textAlign: "center", color: "var(--color-text-secondary)", marginTop: "2rem" }}>Nenhuma informação publicada.</p>
             ) : (
-              Object.entries(groupedInfoItems).map(([topic, topicItems]) => (
+              sortedInfoTopics.map(([topic, topicItems]) => (
                 <div key={topic} style={{ flexShrink: 0, background: "var(--color-surface)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", overflow: "hidden" }}>
                   <button 
                     onClick={() => setExpandedInfoTopics(prev => ({ ...prev, [topic]: !prev[topic] }))}

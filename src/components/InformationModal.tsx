@@ -11,6 +11,7 @@ interface InfoItem {
   topic: string;
   title: string;
   content: string;
+  order?: number;
   createdAt: string;
 }
 
@@ -38,13 +39,18 @@ export default function InformationModal({ onClose }: { onClose: () => void }) {
     setExpandedTopics(prev => ({ ...prev, [topic]: !prev[topic] }));
   };
 
-
-
   const groupedItems = items.reduce((acc, item) => {
     if (!acc[item.topic]) acc[item.topic] = [];
     acc[item.topic].push(item);
     return acc;
   }, {} as Record<string, InfoItem[]>);
+
+  const sortedTopics = Object.entries(groupedItems).sort(([topicA, itemsA], [topicB, itemsB]) => {
+    const minA = Math.min(...itemsA.map(i => typeof i.order === "number" ? i.order : 999));
+    const minB = Math.min(...itemsB.map(i => typeof i.order === "number" ? i.order : 999));
+    if (minA !== minB) return minA - minB;
+    return topicA.localeCompare(topicB);
+  });
 
   if (typeof document === 'undefined') return null;
 
@@ -64,15 +70,15 @@ export default function InformationModal({ onClose }: { onClose: () => void }) {
           Informações Úteis
         </h3>
         
-        <div style={{ overflowY: "auto", flex: 1, paddingRight: "0.5rem" }}>
+        <div style={{ overflowY: "auto", flex: 1, minHeight: 0, paddingRight: "0.5rem" }}>
           {loading ? (
             <p style={{ textAlign: "center", color: "var(--color-text-secondary)" }}>A carregar...</p>
           ) : Object.keys(groupedItems).length === 0 ? (
             <p style={{ textAlign: "center", color: "var(--color-text-secondary)" }}>Não existem informações publicadas no momento.</p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              {Object.entries(groupedItems).map(([topic, topicItems]) => (
-                <div key={topic} style={{ background: "var(--color-bg)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", overflow: "hidden" }}>
+              {sortedTopics.map(([topic, topicItems]) => (
+                <div key={topic} style={{ flexShrink: 0, background: "var(--color-bg)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", overflow: "hidden" }}>
                   <button 
                     onClick={() => toggleTopic(topic)}
                     style={{ width: "100%", padding: "1rem", display: "flex", justifyContent: "space-between", alignItems: "center", background: "transparent", border: "none", cursor: "pointer", color: "var(--color-primary)", fontWeight: 600, fontSize: "1rem" }}
