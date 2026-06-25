@@ -4,7 +4,21 @@ import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, onSnapshot, addDoc, deleteDoc, doc, updateDoc, orderBy, getDoc } from "firebase/firestore";
 import { Bell, Trash2, Edit2, Plus, Info, Check, X } from "lucide-react";
-import { Editor, EditorProvider } from "react-simple-wysiwyg";
+import dynamic from "next/dynamic";
+import "react-quill-new/dist/quill.snow.css";
+
+const ReactQuill = dynamic(() => import("react-quill-new"), { ssr: false });
+
+const quillModules = {
+  toolbar: [
+    [{ 'header': [1, 2, 3, false] }],
+    ['bold', 'italic', 'underline', 'strike'],
+    [{'list': 'ordered'}, {'list': 'bullet'}],
+    ['link'],
+    ['clean']
+  ],
+};
+
 interface InfoItem {
   id: string;
   topic: string;
@@ -158,15 +172,14 @@ export default function InformationManager({ readOnly = false }: { readOnly?: bo
           
           <div>
             <label className="label">Conteúdo</label>
-            <div className="wysiwyg-wrapper">
-              <EditorProvider>
-                <Editor 
-                  value={content} 
-                  onChange={(e) => setContent(e.target.value)} 
-                  placeholder="Escreva a informação aqui..."
-                  style={{ minHeight: '150px', background: 'var(--color-surface)', color: 'var(--color-text-primary)' }}
-                />
-              </EditorProvider>
+            <div className="quill-wrapper">
+              <ReactQuill 
+                theme="snow"
+                value={content}
+                onChange={setContent}
+                modules={quillModules}
+                placeholder="Escreva a informação aqui..."
+              />
             </div>
           </div>
 
@@ -204,7 +217,7 @@ export default function InformationManager({ readOnly = false }: { readOnly?: bo
                       <h5 style={{ margin: "0 0 0.25rem 0", fontSize: "1rem" }}>{item.title}</h5>
                       <div 
                         className="quill-content-preview"
-                        style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-text-secondary)", wordBreak: "normal", overflowWrap: "anywhere" }}
+                        style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-text-secondary)", wordBreak: "break-word" }}
                         dangerouslySetInnerHTML={{ __html: item.content }}
                       />
                     </div>
