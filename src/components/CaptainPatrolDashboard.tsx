@@ -5,6 +5,7 @@ import { initAudio, playAlertBeeps, stopAlertBeeps } from "@/lib/audioAlert";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc, updateDoc, getDoc, addDoc, orderBy, limit, arrayUnion } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import NotificationModal from "@/components/NotificationModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { MapPin, Users, Play, Square, Clock, Calendar, CheckCircle2, AlertTriangle, X, Bell, FileWarning, MessageCircle, Camera, Image as ImageIcon, Search, Crosshair, UserX, Info, ChevronUp, ChevronDown, Radio, CheckCheck, Check, ShieldAlert, Shield, User } from "lucide-react";
 import { requestNotificationPermission, onForegroundMessage } from "@/lib/firebase-messaging";
@@ -2112,14 +2113,14 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
                 )}
               </div>
             ) : (
-              <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+              <div style={{ flex: 1, minHeight: 0, position: "relative", overflow: "hidden", display: "flex", flexDirection: "column" }}>
                 {workplacePlans.length > 1 && (
                   <div style={{ padding: "0.5rem 1rem", background: "var(--color-surface)", borderBottom: "1px solid var(--color-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <button onClick={() => { setSelectedCommsPlan(null); setSelectedPinInfo(null); }} style={{ background: "none", border: "none", color: "var(--color-primary)", fontWeight: 600, cursor: "pointer", fontSize: "0.85rem" }}>⬅ Trocar Planta</button>
                     <span style={{ fontSize: "0.85rem", fontWeight: 700 }}>{selectedCommsPlan.name}</span>
                   </div>
                 )}
-                <div style={{ flex: 1, position: "relative" }}>
+                <div style={{ flex: 1, minHeight: 0, position: "relative", overflow: "hidden" }}>
                   <MapViewer 
                     imageUrl={selectedCommsPlan.imageUrl}
                     locators={locators.filter(l => !l.planId || l.planId === selectedCommsPlan.id)}
@@ -2278,38 +2279,14 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
         </div>
       )}
 
-      {/* MODAL MENSAGEM DIRETA INDIVIDUAL */}
-      {activePanel === 'zello' && showDirectMsgModal && (
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: "calc(76px + env(safe-area-inset-bottom))", background: "rgba(0,0,0,0.85)", zIndex: 9900, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
-          <div style={{ background: "var(--color-surface)", width: "100%", maxWidth: "450px", borderRadius: "var(--radius-lg)", overflow: "hidden", border: "1px solid var(--color-border)" }}>
-            <div style={{ background: "#6366f1", padding: "1rem 1.25rem", display: "flex", justifyContent: "space-between", alignItems: "center", color: "white" }}>
-              <h4 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>Mensagem para {showDirectMsgModal.vigiaName}</h4>
-              <button onClick={() => setShowDirectMsgModal(null)} style={{ background: "none", border: "none", color: "white", cursor: "pointer" }}><X size={18} /></button>
-            </div>
-            <div style={{ padding: "1.25rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <textarea 
-                className="input" 
-                rows={4} 
-                value={directMsgText} 
-                onChange={e => setDirectMsgText(e.target.value)}
-                placeholder={`Escreva a instrução direta para ${showDirectMsgModal.vigiaName}...`}
-                style={{ resize: "vertical" }}
-              />
-              <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
-                <button onClick={() => setShowDirectMsgModal(null)} className="btn btn-secondary" style={{ padding: "0.7rem 1.2rem" }}>Cancelar</button>
-                <button 
-                  onClick={sendDirectMessage} 
-                  disabled={sendingDirectMsg || !directMsgText}
-                  className="btn btn-primary" 
-                  style={{ padding: "0.7rem 1.2rem", background: "#6366f1" }}
-                >
-                  {sendingDirectMsg ? "A enviar..." : "Enviar"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* MODAL MENSAGEM DIRETA INDIVIDUAL (Usando NotificationModal oficial) */}
+      <NotificationModal 
+        isOpen={!!showDirectMsgModal}
+        onClose={() => setShowDirectMsgModal(null)}
+        selectedPersonId={showDirectMsgModal?.vigiaId || ""}
+        usersMap={Object.fromEntries(Object.values(teamVigias).map((u: any) => [u?.id || "", u?.name || u?.email || "Segurança"]))}
+        allVigiaIds={workplaceGuardsList.map((g: any) => g.id)}
+      />
 
       {mapModalData && (
         <MapModal
