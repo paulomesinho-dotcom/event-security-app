@@ -651,8 +651,18 @@ export default function CaptainPatrolDashboard({ onOpenMap, isSidebarOpen, force
 
   const overdueShifts = useMemo(() => {
     return teamShifts.filter(shift => {
-      if (shift.dates) {
-        const sDates = shift.dates.split(",").map((d: string) => d.trim());
+      // 1. Most reliable: Use exact ISO timestamps if available
+      if (shift.status === "pending" && shift.startTime) {
+        return new Date(shift.startTime).getTime() < new Date().getTime();
+      }
+      if (shift.status === "active" && shift.endTime) {
+        return new Date(shift.endTime).getTime() < new Date().getTime();
+      }
+
+      // 2. Fallback: Parse legacy date strings and compare manual time
+      const dateStrings = [shift.date, shift.days, shift.dates].filter(Boolean).join(",");
+      if (dateStrings) {
+        const sDates = dateStrings.split(",").map((d: string) => d.trim());
         const isTodayOrPast = sDates.some((d: string) => {
           if (d === todayISO) return true;
           if (d.match(/^\d{4}-\d{2}-\d{2}$/)) return d <= todayISO;
@@ -663,14 +673,6 @@ export default function CaptainPatrolDashboard({ onOpenMap, isSidebarOpen, force
           return false;
         });
         if (!isTodayOrPast) return false;
-      }
-      if (shift.days && typeof shift.days === "string") {
-        const d = shift.days.trim();
-        if (d.match(/^\d{4}-\d{2}-\d{2}$/) && d > todayISO) return false;
-        if (d.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
-          const [day, m, y] = d.split("/");
-          if (`${y}-${m}-${day}` > todayISO) return false;
-        }
       }
 
       if (shift.status === "pending") {
