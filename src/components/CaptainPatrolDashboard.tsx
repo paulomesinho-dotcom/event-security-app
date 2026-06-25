@@ -6,7 +6,7 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc, updateDoc, getDoc, addDoc, orderBy, limit, arrayUnion } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useAuth } from "@/contexts/AuthContext";
-import { MapPin, Play, Square, Clock, Calendar, CheckCircle2, AlertTriangle, X, Bell, FileWarning, MessageCircle, Camera, Image as ImageIcon, Search, Crosshair, UserX, Info, ChevronUp, ChevronDown, Radio, CheckCheck, Check, ShieldAlert, Shield, User } from "lucide-react";
+import { MapPin, Users, Play, Square, Clock, Calendar, CheckCircle2, AlertTriangle, X, Bell, FileWarning, MessageCircle, Camera, Image as ImageIcon, Search, Crosshair, UserX, Info, ChevronUp, ChevronDown, Radio, CheckCheck, Check, ShieldAlert, Shield, User } from "lucide-react";
 import { requestNotificationPermission, onForegroundMessage } from "@/lib/firebase-messaging";
 
 import dynamic from "next/dynamic";
@@ -276,6 +276,22 @@ export default function CaptainPatrolDashboard({ onOpenMap, isSidebarOpen, force
   const [showGlobalAlertModal, setShowGlobalAlertModal] = useState(false);
   const [globalAlertText, setGlobalAlertText] = useState("");
   const [sendingGlobalAlert, setSendingGlobalAlert] = useState(false);
+
+  // Comunicações reestruturadas
+  const [showTeamNotifyModal, setShowTeamNotifyModal] = useState(false);
+  const [teamNotifyText, setTeamNotifyText] = useState("");
+  const [sendingTeamNotify, setSendingTeamNotify] = useState(false);
+
+  const [showCommsPlansModal, setShowCommsPlansModal] = useState(false);
+  const [selectedCommsPlan, setSelectedCommsPlan] = useState<any>(null);
+  const [selectedPinInfo, setSelectedPinInfo] = useState<any>(null);
+
+  const [showTeamMembersModal, setShowTeamMembersModal] = useState(false);
+  const [selectedTeamMemberDetails, setSelectedTeamMemberDetails] = useState<any>(null);
+
+  const [showDirectMsgModal, setShowDirectMsgModal] = useState<{ vigiaId: string; vigiaName: string } | null>(null);
+  const [directMsgText, setDirectMsgText] = useState("");
+  const [sendingDirectMsg, setSendingDirectMsg] = useState(false);
   
   // Info Data
   const [infoItems, setInfoItems] = useState<any[]>([]);
@@ -741,6 +757,56 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
       });
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const sendTeamNotification = async () => {
+    if (!teamNotifyText) return;
+    setSendingTeamNotify(true);
+    try {
+      await fetch("/api/send-notification-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: teamNotifyText,
+          senderName: user?.name || user?.email,
+          senderId: user?.uid,
+          title: "Mensagem da Equipa (Capitão)",
+          target: "all"
+        })
+      });
+      alert("Mensagem enviada para a equipa!");
+      setTeamNotifyText("");
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao enviar mensagem para a equipa.");
+    } finally {
+      setSendingTeamNotify(false);
+    }
+  };
+
+  const sendDirectMessage = async () => {
+    if (!showDirectMsgModal || !directMsgText) return;
+    setSendingDirectMsg(true);
+    try {
+      await fetch("/api/send-notification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: showDirectMsgModal.vigiaId,
+          message: directMsgText,
+          senderName: user?.name || user?.email,
+          title: "Mensagem Direta do Capitão"
+        })
+      });
+      alert(`Mensagem enviada para ${showDirectMsgModal.vigiaName}!`);
+      setDirectMsgText("");
+      setShowDirectMsgModal(null);
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao enviar mensagem direta.");
+    } finally {
+      setSendingDirectMsg(false);
     }
   };
 
@@ -1758,74 +1824,70 @@ const [allSuspects, setAllSuspects] = useState<any[]>([]);
               <button onClick={() => setActivePanel(null)} style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "white", cursor: "pointer", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={18}/></button>
             </div>
             
-            <div style={{ padding: "1.25rem", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1rem", flex: 1 }}>
-              <button 
-              onClick={() => setShowGlobalAlertModal(true)}
-              style={{ width: "100%", padding: "1.2rem", background: "linear-gradient(135deg, #4285F4, #1A73E8)", color: "white", border: "none", borderRadius: "var(--radius-lg)", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", fontSize: "1rem", boxShadow: "0 4px 16px rgba(66, 133, 244, 0.4)" }}
-            >
-              <Bell size={24} /> NOTIFICAR TODOS
-            </button>
+            <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+              <div style={{ padding: "1.25rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                  <button 
+                    onClick={() => setShowTeamNotifyModal(true)}
+                    style={{ width: "100%", padding: "1rem", background: "linear-gradient(135deg, #4285F4, #1A73E8)", color: "white", border: "none", borderRadius: "var(--radius-lg)", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", fontSize: "0.95rem", boxShadow: "0 4px 12px rgba(66, 133, 244, 0.3)" }}
+                  >
+                    <Bell size={20} /> NOTIFICAR EQUIPA
+                  </button>
 
-              
-            {globalNotifications.length > 0 && (
-              <div style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                <h4 style={{ margin: "0", color: "var(--color-text-secondary)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Histórico de Notificações</h4>
-                <div style={{ maxHeight: "300px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.5rem", paddingRight: "0.5rem" }}>
-                  {globalNotifications.map((notif: any) => {
-                    const isRead = notif.readBy?.includes(user?.uid);
-                    return (
-                      <div 
-                        key={notif.id}
-                        onClick={() => markGlobalNotificationAsRead(notif)}
-                        style={{ 
-                          padding: "1rem", 
-                          background: isRead ? "var(--color-surface)" : "linear-gradient(135deg, rgba(249,115,22,0.1), rgba(234,88,12,0.05))",
-                          border: isRead ? "1px solid var(--color-border)" : "1px solid rgba(249,115,22,0.3)",
-                          borderRadius: "var(--radius-md)",
-                          cursor: "pointer"
-                        }}
-                      >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.25rem" }}>
-                          <span style={{ fontWeight: 700, fontSize: "0.85rem", color: isRead ? "var(--color-text-primary)" : "#f97316" }}>{notif.senderName}</span>
-                          <span style={{ fontSize: "0.7rem", color: "var(--color-text-tertiary)", display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                            {new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            {isRead ? <CheckCheck size={14} color="#3b82f6" /> : <Check size={14} />}
-                          </span>
-                        </div>
-                        <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-text-secondary)", lineHeight: 1.4 }}>{notif.message}</p>
-                      </div>
-                    );
-                  })}
+                  <button 
+                    onClick={() => {
+                      if (activeWorkplace?.plans?.length === 1) {
+                        setSelectedCommsPlan(activeWorkplace.plans[0]);
+                      } else {
+                        setSelectedCommsPlan(null);
+                      }
+                      setSelectedPinInfo(null);
+                      setShowCommsPlansModal(true);
+                    }}
+                    style={{ width: "100%", padding: "1rem", background: "linear-gradient(135deg, #6366f1, #4338ca)", color: "white", border: "none", borderRadius: "var(--radius-lg)", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", fontSize: "0.95rem", boxShadow: "0 4px 12px rgba(99, 102, 241, 0.3)" }}
+                  >
+                    <MapPin size={20} /> ABRIR PLANTAS
+                  </button>
+
+                  <button 
+                    onClick={() => {
+                      setSelectedTeamMemberDetails(null);
+                      setShowTeamMembersModal(true);
+                    }}
+                    style={{ width: "100%", padding: "1rem", background: "linear-gradient(135deg, #10b981, #059669)", color: "white", border: "none", borderRadius: "var(--radius-lg)", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", fontSize: "0.95rem", boxShadow: "0 4px 12px rgba(16, 185, 129, 0.3)" }}
+                  >
+                    <Users size={20} /> VER EQUIPA
+                  </button>
                 </div>
+
+                <div style={{ height: "1px", background: "var(--color-border)", margin: "0.25rem 0" }} />
+                <h4 style={{ margin: "0", color: "var(--color-text-secondary)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Canais Zello</h4>
+
+                {activeWorkplace?.zelloChannelLink ? (
+                  <a href={activeWorkplace.zelloChannelLink} style={{ padding: "1.2rem", background: "var(--color-surface)", border: "1px solid rgba(249,115,22,0.3)", borderRadius: "var(--radius-lg)", fontWeight: 700, color: "var(--color-text-primary)", textDecoration: "none", display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "1rem" }}>
+                    <div style={{ width: "40px", height: "40px", borderRadius: "50%", background: "rgba(249,115,22,0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "#f97316" }}><Radio size={20} /></div>
+                    Rádio Vigias
+                  </a>
+                ) : (
+                  <div style={{ padding: "1.2rem", background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "0.75rem", opacity: 0.5 }}>
+                     <div style={{ width: "40px", height: "40px", borderRadius: "50%", background: "var(--color-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}><Radio size={20} /></div>
+                     Canal Vigias não configurado
+                  </div>
+                )}
+
+                {(activeWorkplace as any)?.zelloGroupLink ? (
+                  <a href={(activeWorkplace as any).zelloGroupLink} style={{ padding: "1.2rem", background: "var(--color-surface)", border: "1px solid rgba(168,85,247,0.3)", borderRadius: "var(--radius-lg)", fontWeight: 700, color: "var(--color-text-primary)", textDecoration: "none", display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "1rem" }}>
+                    <div style={{ width: "40px", height: "40px", borderRadius: "50%", background: "rgba(168,85,247,0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "#a855f7" }}><Radio size={20} /></div>
+                    Rádio Capitães e Coordenador
+                  </a>
+                ) : (
+                  <div style={{ padding: "1.2rem", background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "0.75rem", opacity: 0.5 }}>
+                     <div style={{ width: "40px", height: "40px", borderRadius: "50%", background: "var(--color-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}><Radio size={20} /></div>
+                     Canal Capitães não configurado
+                  </div>
+                )}
               </div>
-            )}
-
-            <div style={{ height: "1px", background: "var(--color-border)", margin: "0.5rem 0" }} />
-              <h4 style={{ margin: "0 0 0.5rem", color: "var(--color-text-secondary)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Canais Zello</h4>
-
-              {activeWorkplace?.zelloChannelLink ? (
-                <a href={activeWorkplace.zelloChannelLink} style={{ padding: "1.2rem", background: "var(--color-surface)", border: "1px solid rgba(249,115,22,0.3)", borderRadius: "var(--radius-lg)", fontWeight: 700, color: "var(--color-text-primary)", textDecoration: "none", display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "1rem" }}>
-                  <div style={{ width: "40px", height: "40px", borderRadius: "50%", background: "rgba(249,115,22,0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "#f97316" }}><Radio size={20} /></div>
-                  Rádio Vigias
-                </a>
-              ) : (
-                <div style={{ padding: "1.2rem", background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "0.75rem", opacity: 0.5 }}>
-                   <div style={{ width: "40px", height: "40px", borderRadius: "50%", background: "var(--color-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}><Radio size={20} /></div>
-                   Canal Vigias não configurado
-                </div>
-              )}
-
-              {(activeWorkplace as any)?.zelloGroupLink ? (
-                <a href={(activeWorkplace as any).zelloGroupLink} style={{ padding: "1.2rem", background: "var(--color-surface)", border: "1px solid rgba(168,85,247,0.3)", borderRadius: "var(--radius-lg)", fontWeight: 700, color: "var(--color-text-primary)", textDecoration: "none", display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "1rem" }}>
-                  <div style={{ width: "40px", height: "40px", borderRadius: "50%", background: "rgba(168,85,247,0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "#a855f7" }}><Radio size={20} /></div>
-                  Rádio Capitães/Coord.
-                </a>
-              ) : (
-                <div style={{ padding: "1.2rem", background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "0.75rem", opacity: 0.5 }}>
-                   <div style={{ width: "40px", height: "40px", borderRadius: "50%", background: "var(--color-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}><Radio size={20} /></div>
-                   Canal Capitães não configurado
-                </div>
-              )}
+            </div>
             </div>
           </div>
         )}
