@@ -133,6 +133,7 @@ export default function DashboardPage() {
   const [showProfile, setShowProfile] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
+  const [showPatrolWpModal, setShowPatrolWpModal] = useState(false);
   const [newPass, setNewPass] = useState("");
   const [passMsg, setPassMsg] = useState("");
 
